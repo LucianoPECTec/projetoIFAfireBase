@@ -4,16 +4,13 @@
    ---------------------------------------------------------
    Seções:
    1. Utilidades e formatação
-   2. Armazenamento dos lançamentos
+   2. Armazenamento dos lançamentos (Firebase)
    3. Cálculos do IFA e da projeção
    4. Rankings (Top 5 e supervisores)
    5. Renderização das telas
    6. Calculadora semanal
    7. Fichas
    8. Inicialização
-
-   Convenção: presença e IFA ficam em PONTOS PERCENTUAIS (88,6 = 88,6%).
-   Só `escola.presenca` (dados.js) é fração (0,886).
    ========================================================= */
 "use strict";
 
@@ -58,9 +55,7 @@ const formatarNota = valor => semValor(valor)
 const formatarPlataforma = (config, valor) => semValor(valor) ? "Sem dado"
   : config.formato === "percentual" ? `${numero(valor * 100, 2)}%` : numero(valor, config.casas);
 
-// ==========================================
-// Formatação de 2 Colunas para o Modal/Ficha
-// ==========================================
+// Layout de 2 colunas para as fichas (modal)
 function textoValor(config, registro) {
   if (!registro || semValor(registro[config.campo])) return "Sem dado";
   const principal = formatarPlataforma(config, registro[config.campo]);
@@ -95,17 +90,31 @@ function preencherTabela(id, linhas, colunasVazio = 1) {
     : `<tr><td colspan="${colunasVazio}" class="sem-dado">Nenhum resultado disponível.</td></tr>`;
 }
 
-function avisar(texto) {
+// Novo sistema de avisos flutuantes (Toast)
+function avisar(texto, erro = false) {
   const area = $("#status-painel");
   if (area) area.textContent = texto;
-  else alert(texto);
+
+  const antigo = document.getElementById("toast-aviso");
+  if (antigo) antigo.remove();
+
+  const toast = document.createElement("div");
+  toast.id = "toast-aviso";
+  toast.className = erro ? "toast-erro" : "toast-sucesso";
+  toast.textContent = texto;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentElement) toast.remove();
+  }, 4000);
 }
 
 /* =========================
    2. Armazenamento dos lançamentos (Firebase)
    ========================= */
 
-// Inicialização do Firebase
+// Inicialização do Firebase (Cole aqui as suas chaves reais)
 const firebaseConfig = {
   apiKey: "SUA_API_KEY_AQUI",
   authDomain: "SEU_PROJETO.firebaseapp.com",
@@ -436,9 +445,7 @@ function renderizarPlataformas() {
     ? `${ordenadas.length} de ${ESCOLAS.length} escolas com resultado · Média da URE: ${textoValor(config, mediaRegistro(config, ordenadas))} · Melhor resultado: ${textoValor(config, ordenadas[0])}`
     : "Nenhuma escola com resultado nesta plataforma.";
 
-  // ==========================================
   // Layout de 2 Colunas para o Card da Plataforma
-  // ==========================================
   $("#barras-plataforma").innerHTML = ordenadas
     .map((e, i) => ({ e, n: i + 1 }))
     .filter(({ e }) => correspondeBusca(e, busca))
@@ -551,7 +558,7 @@ async function calcularSemana() {
     const texto = campo.value.trim();
     const valor = Number(texto);
     if (texto !== "" && (Number.isNaN(valor) || valor < 0 || valor > 100)) {
-      avisar(`Valor inválido para ${buscarEscola(campo.dataset.codigo).nome}: use de 0 a 100.`);
+      avisar(`Valor inválido para ${buscarEscola(campo.dataset.codigo).nome}: use de 0 a 100.`, true);
       campo.focus();
       return;
     }
@@ -578,7 +585,7 @@ async function calcularSemana() {
       : `Semana ${semana} salva neste navegador.`);
   } catch (erro) {
     console.error(erro);
-    avisar("Não foi possível salvar na base Firebase. Confira a internet e tente de novo.");
+    avisar("Não foi possível salvar na base Firebase. Confira a internet e tente de novo.", true);
   } finally {
     botao.disabled = false;
   }
