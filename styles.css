@@ -671,3 +671,35 @@ tbody tr:nth-child(even) { background: #fafcfe; }
   gap: 16px;
   flex-wrap: wrap;
 }
+
+/* ==========================================
+   Estilos Adicionais: Popup Flutuante (Toast)
+   ========================================== */
+#toast-aviso {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14px 28px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--branco);
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  max-width: 90vw;
+  animation: toast-entrada 0.3s ease-out, toast-saida 0.3s ease-in 3.7s forwards;
+}
+
+#toast-aviso.toast-sucesso { background: var(--verde); }
+#toast-aviso.toast-erro { background: var(--vermelho); }
+
+@keyframes toast-entrada {
+  from { bottom: -50px; opacity: 0; }
+  to { bottom: 24px; opacity: 1; }
+}
+@keyframes toast-saida {
+  from { bottom: 24px; opacity: 1; }
+  to { bottom: -50px; opacity: 0; }
+}
