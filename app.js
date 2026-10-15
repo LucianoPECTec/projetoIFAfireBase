@@ -20,12 +20,22 @@
 const CHAVE_ARMAZENAMENTO = "lancamentosIFA-URE-SJRP";
 const LIMITE_ATENCAO = 90; // média necessária a partir da qual a escola pede atenção
 
+// ==========================================
+// Injeção Dinâmica: Adiciona a aba de Classificação Total no painel
+// ==========================================
+if (typeof PLATAFORMAS !== "undefined" && !PLATAFORMAS.top3) {
+  PLATAFORMAS.top3 = { 
+    nome: "Top 3 (Pódios)", 
+    campo: "top3", 
+    casas: 0 
+  };
+}
+
 /* =========================
    1. Utilidades e formatação
    ========================= */
 
-const $ = (seletor, raiz = document) => raiz.querySelector(seletor);
-const $$ = (seletor, raiz = document) => Array.from(raiz.querySelectorAll(seletor));
+const $ = (seletor, raiz = document) => raiz.querySelector(seletor); const $$ = (seletor, raiz = document) => Array.from(raiz.querySelectorAll(seletor));
 
 const semValor = valor => valor === null || valor === undefined || valor === "";
 const media = (lista, extrair) => lista.reduce((t, item) => t + extrair(item), 0) / lista.length;
@@ -38,27 +48,32 @@ function numero(valor, casas = 2) {
   });
 }
 
-// Recebe pontos percentuais (88,6) e devolve "88,60%".
 const formatarPontos = (valor, casas = 2) =>
   semValor(valor) ? "Sem dado" : `${numero(valor, casas)}%`;
 
-// Nota como na planilha: até 2 casas, sem zeros à direita (9,4 · 9 · 8,97).
 const formatarNota = valor => semValor(valor)
   ? "Sem dado"
   : (Math.round(Number(valor) * 100) / 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 
-// Formata o resultado de uma plataforma conforme o seu cadastro em dados.js.
 const formatarPlataforma = (config, valor) => semValor(valor) ? "Sem dado"
   : config.formato === "percentual" ? `${numero(valor * 100, 2)}%` : numero(valor, config.casas);
 
-// Resultado completo de um registro: "65,83% · nota 9,4" (com nota) ou só o valor.
+// ==========================================
+// Formatação de 2 Colunas para o Modal/Ficha
+// ==========================================
 function textoValor(config, registro) {
   if (!registro || semValor(registro[config.campo])) return "Sem dado";
   const principal = formatarPlataforma(config, registro[config.campo]);
-  return config.campoNota ? `${principal} · nota ${formatarNota(registro[config.campoNota])}` : principal;
+  
+  if (config.campoNota) {
+    return `<div class="duas-colunas-tabela">
+              <span><strong>Nota:</strong> ${formatarNota(registro[config.campoNota])}</span> 
+              <span><strong>Percentual:</strong> ${principal}</span>
+            </div>`;
+  }
+  return config.campo === 'top3' ? `${principal} vezes` : principal;
 }
 
-// Registro "médio" de uma lista de escolas, nos campos da plataforma.
 function mediaRegistro(config, lista) {
   if (!lista.length) return null;
   const registro = { [config.campo]: media(lista, e => e[config.campo]) };
@@ -69,7 +84,6 @@ function mediaRegistro(config, lista) {
 const nomeCompleto = escola => `${escola.nome} - ${escola.codigo}`;
 const buscarEscola = codigo => ESCOLAS.find(e => e.codigo === String(codigo));
 
-// Evita que textos da base sejam interpretados como HTML.
 const escapar = texto => String(texto ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -81,7 +95,6 @@ function preencherTabela(id, linhas, colunasVazio = 1) {
     : `<tr><td colspan="${colunasVazio}" class="sem-dado">Nenhum resultado disponível.</td></tr>`;
 }
 
-// Mensagem acessível (leitores de tela) com alternativa para alert().
 function avisar(texto) {
   const area = $("#status-painel");
   if (area) area.textContent = texto;
@@ -92,7 +105,7 @@ function avisar(texto) {
    2. Armazenamento dos lançamentos (Firebase)
    ========================= */
 
-// Inicialização do Firebase (Cole aqui as chaves do seu projeto)
+// Inicialização do Firebase
 const firebaseConfig = {
   apiKey: "SUA_API_KEY_AQUI",
   authDomain: "SEU_PROJETO.firebaseapp.com",
@@ -102,7 +115,6 @@ const firebaseConfig = {
   appId: "SEU_APP_ID"
 };
 
-// Inicializa o app e o banco de dados via compat library
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const docRefIFA = db.collection("monitoramento").doc("lancamentosIFA");
@@ -115,12 +127,10 @@ function mesclarLancamentos(base, local) {
   return resultado;
 }
 
-// Com o Firebase configurado, a sincronização é sempre ativa
 function sincronizacaoAtiva() {
   return true; 
 }
 
-// O estado inicial aguarda a carga do Firebase. 
 let lancamentos = typeof LANCAMENTOS_SEMANAIS !== "undefined" ? structuredClone(LANCAMENTOS_SEMANAIS) : {};
 
 function definirSincronizacao(texto, alerta = false) {
@@ -130,7 +140,6 @@ function definirSincronizacao(texto, alerta = false) {
   area.classList.toggle("status-alerta", alerta);
 }
 
-// Lê os lançamentos do Firestore (ao abrir e ao voltar para a aba).
 async function carregarRemoto() {
   if (!sincronizacaoAtiva()) return;
   try {
@@ -139,7 +148,6 @@ async function carregarRemoto() {
     if (docSnap.exists) {
       lancamentos = mesclarLancamentos(typeof LANCAMENTOS_SEMANAIS !== "undefined" ? LANCAMENTOS_SEMANAIS : {}, docSnap.data());
     } else {
-      // Se for a primeira vez que roda no banco limpo, cria a estrutura vazia
       await docRefIFA.set({});
       lancamentos = mesclarLancamentos(typeof LANCAMENTOS_SEMANAIS !== "undefined" ? LANCAMENTOS_SEMANAIS : {}, {});
     }
@@ -153,7 +161,6 @@ async function carregarRemoto() {
   }
 }
 
-// Envia só os valores alterados; o merge:true do Firebase cuida de não apagar os outros
 async function enviarRemoto(registros, responsavel) {
   const dadosParaSalvar = {};
   
@@ -164,23 +171,19 @@ async function enviarRemoto(registros, responsavel) {
     dadosParaSalvar[reg.semana][reg.codigo] = reg.valor;
   });
 
-  // O merge garante a gravação cirúrgica: altera apenas a semana e a escola enviada
   await docRefIFA.set(dadosParaSalvar, { merge: true });
 
-  // A resposta de sucesso significa que podemos aplicar localmente 
   if (typeof aplicarRegistro === 'function') {
     registros.forEach(aplicarRegistro);
   }
 }
 
-// A função original salvarLancamentos fica vazia pois o firebase assumiu o papel
 const salvarLancamentos = () => {};
 
 /* =========================
    3. Cálculos do IFA e da projeção
    ========================= */
 
-// Soma e média de presença: base consolidada + semanas já lançadas.
 function presencaAtual(escola) {
   let soma = escola.presenca * 100 * CONFIG.semanasConcluidas;
   let semanas = CONFIG.semanasConcluidas;
@@ -195,7 +198,6 @@ function presencaAtual(escola) {
   return { soma, semanas, media: soma / semanas };
 }
 
-// Média que a escola precisa manter nas semanas que faltam para fechar o IFA.
 function mediaNecessaria(escola) {
   const { soma, semanas } = presencaAtual(escola);
   const restantes = CONFIG.semanaFinal - semanas;
@@ -215,13 +217,11 @@ const SELOS = {
 };
 const seloSituacao = situacao => `<span class="${SELOS[situacao]}">${situacao}</span>`;
 
-// Projeção de fechamento: semanas sem lançamento repetem a média atual da escola.
 function presencaProjetada(escola) {
   const { soma, semanas, media: atual } = presencaAtual(escola);
   return (soma + (CONFIG.semanaFinal - semanas) * atual) / CONFIG.semanaFinal;
 }
 
-// Estado de cada semana futura: lançada, parcial ou prevista (atualiza sozinho).
 function projecaoSemanal() {
   const semanas = [];
   for (let s = CONFIG.semanasConcluidas + 1; s <= CONFIG.semanaFinal; s++) {
@@ -249,7 +249,6 @@ function projecaoSemanal() {
 
 const rankingTop5 = () => [...ESCOLAS].sort((a, b) => a.posicao - b.posicao).slice(0, 5);
 
-// Critério: média da nota final das escolas; desempate pela presença média.
 function rankingSupervisores() {
   const grupos = new Map();
   ESCOLAS.filter(e => e.supervisor).forEach(e => {
@@ -273,7 +272,6 @@ function rankingSupervisores() {
    5. Renderização das telas
    ========================= */
 
-// O atributo data-contexto define qual ficha abre: ranking, plataforma, ifa ou escolas.
 const botaoEscola = (escola, contexto = "escolas") =>
   `<button type="button" class="escola-link" data-codigo="${escola.codigo}" data-contexto="${contexto}">${escapar(nomeCompleto(escola))}</button>`;
 
@@ -286,7 +284,6 @@ function renderizarTop5() {
   if (!area) return;
   const top = rankingTop5();
 
-  // Pódio: 1º, 2º e 3º (o CSS posiciona o 1º no centro; a ordem de leitura continua 1º, 2º, 3º)
   const podio = top.slice(0, 3).map((e, i) => `
     <li class="podio-item podio-${i + 1}">
       <span class="sr-only">${i + 1}º lugar</span>
@@ -299,7 +296,6 @@ function renderizarTop5() {
       <span class="podio-degrau" aria-hidden="true">${i + 1}º</span>
     </li>`).join("");
 
-  // 4º e 5º lugares em linhas
   const demais = top.slice(3).map((e, i) => `
     <li class="top-linha">
       <span class="top-num">${i + 4}º</span>
@@ -348,7 +344,6 @@ function renderizarVisaoGeral() {
   };
   Object.entries(kpis).forEach(([id, texto]) => { if ($(id))$(id).textContent = texto; });
 
-  // Destaques que são escolas: botões clicáveis
   [["#kpi-ranking", ESCOLAS[0], "ranking"], ["#kpi-nota", maisNota, "ranking"], ["#kpi-presenca", maisPresenca, "ifa"]]
     .forEach(([id, escola, contexto]) => { if ($(id))$(id).innerHTML = botaoEscola(escola, contexto); });
 
@@ -367,7 +362,6 @@ function renderizarVisaoGeral() {
   renderizarProjecao();
 }
 
-// Critérios de ordenação reutilizados pelas telas Escolas e IFA.
 const ORDENACOES = {
   ranking: (a, b) => a.posicao - b.posicao,
   nota: (a, b) => b.notaFinal - a.notaFinal,
@@ -407,7 +401,6 @@ function renderizarEscolas() {
     </tr>`), 7);
 }
 
-// Plataforma exibida no momento (as abas alteram este valor)
 let plataformaAtual = "tarefa";
 
 function montarAbasPlataforma() {
@@ -425,11 +418,9 @@ function montarAbasPlataforma() {
   });
 }
 
-// Ranking da plataforma em barras proporcionais ao melhor resultado
 function renderizarPlataformas() {
   const config = PLATAFORMAS[plataformaAtual];
   const busca = $("#busca-plataforma").value.trim().toLowerCase();
-  // Plataformas com nota (Tarefa SP) são ranqueadas pela nota, como na planilha de origem.
   const campo = config.campoNota || config.campo;
 
   const ordenadas = ESCOLAS.filter(e => !semValor(e[campo])).sort((a, b) => b[campo] - a[campo]);
@@ -438,16 +429,29 @@ function renderizarPlataformas() {
 
   $("#titulo-plataforma-selecionada").textContent = config.nome;
   $("#descricao-plataforma").textContent = config.campoNota
-    ? "Ranqueado pela nota, como na planilha de origem. Barras proporcionais à maior nota. Selecione a escola para ver a ficha."
+    ? "Ranqueado pela nota da plataforma. Barras proporcionais à maior nota. Selecione a escola para ver a ficha."
     : "Barras proporcionais ao melhor resultado. Selecione a escola para ver a ficha.";
+  
   $("#resumo-plataforma").textContent = ordenadas.length
     ? `${ordenadas.length} de ${ESCOLAS.length} escolas com resultado · Média da URE: ${textoValor(config, mediaRegistro(config, ordenadas))} · Melhor resultado: ${textoValor(config, ordenadas[0])}`
     : "Nenhuma escola com resultado nesta plataforma.";
 
+  // ==========================================
+  // Layout de 2 Colunas para o Card da Plataforma
+  // ==========================================
   $("#barras-plataforma").innerHTML = ordenadas
     .map((e, i) => ({ e, n: i + 1 }))
     .filter(({ e }) => correspondeBusca(e, busca))
-    .map(({ e, n }) => `
+    .map(({ e, n }) => {
+      
+      const renderValor = config.campoNota 
+        ? `<div class="barra-valores-duplos">
+             <div class="valor-col"><small>Nota</small><strong>${formatarNota(e[config.campoNota])}</strong></div>
+             <div class="valor-col"><small>Percentual</small><strong>${formatarPlataforma(config, e[config.campo])}</strong></div>
+           </div>`
+        : `<strong class="barra-valor">${formatarPlataforma(config, e[campo])}${config.campo === 'top3' ? ' <small>vezes</small>' : ''}</strong>`;
+
+      return `
       <li class="barra ${n <= 3 ? `barra-${n}` : ""}">
         <span class="barra-pos">${n}º</span>
         <div class="barra-corpo">
@@ -456,10 +460,9 @@ function renderizarPlataformas() {
             <span class="barra-fill" style="width:${maximo > 0 ? (e[campo] / maximo * 100).toFixed(1) : 0}%"></span>
           </div>
         </div>
-        <strong class="barra-valor">${config.campoNota
-          ? `${formatarNota(e[config.campoNota])}<small>${formatarPlataforma(config, e[config.campo])}</small>`
-          : formatarPlataforma(config, e[campo])}</strong>
-      </li>`).join("");
+        ${renderValor}
+      </li>`;
+    }).join("");
 
   $("#sem-dado-plataforma").innerHTML = semResultado.length
     ? `Sem resultado nesta plataforma: ${semResultado.map(e => botaoEscola(e, "plataforma")).join("; ")}.`
@@ -494,7 +497,7 @@ function atualizarTudo() {
   renderizarVisaoGeral();
   renderizarEscolas();
   renderizarIFA();
-  if (typeof renderizarGraficos === "function") renderizarGraficos(); // módulo graficos.js
+  if (typeof renderizarGraficos === "function") renderizarGraficos(); 
 }
 
 /* =========================
@@ -502,7 +505,7 @@ function atualizarTudo() {
    ========================= */
 
 const TODAS = "__todas__";
-let calculadoraAlterada = false; // indica digitação em andamento
+let calculadoraAlterada = false;
 
 function preencherResponsaveis() {
   const select = $("#responsavel-lancamento");
@@ -512,7 +515,6 @@ function preencherResponsaveis() {
     .forEach(nome => select.add(new Option(nome, nome)));
 }
 
-// Cada supervisor(a) vê e lança apenas as próprias escolas.
 function escolasDoResponsavel() {
   const quem = $("#responsavel-lancamento").value;
   if (!quem) return [];
@@ -576,7 +578,7 @@ async function calcularSemana() {
       : `Semana ${semana} salva neste navegador.`);
   } catch (erro) {
     console.error(erro);
-    avisar("Não foi possível salvar na base Firebase. Confira a internet e tente de novo; o que você digitou foi mantido.");
+    avisar("Não foi possível salvar na base Firebase. Confira a internet e tente de novo.");
   } finally {
     botao.disabled = false;
   }
@@ -592,8 +594,8 @@ function exportarLancamentos() {
 }
 
 function restaurarBase() {
-  if (sincronizacaoAtiva()) return avisar("Com a base Firebase, os lançamentos ficam no banco. Para corrigir, edite os campos e salve.");
-  if (!confirm("Deseja restaurar a base original e apagar os lançamentos salvos neste navegador?")) return;
+  if (sincronizacaoAtiva()) return avisar("Com a base Firebase, edite diretamente os campos para corrigir os lançamentos.");
+  if (!confirm("Deseja restaurar a base original?")) return;
   localStorage.removeItem(CHAVE_ARMAZENAMENTO);
   lancamentos = structuredClone(LANCAMENTOS_SEMANAIS);
   atualizarTudo();
@@ -601,10 +603,9 @@ function restaurarBase() {
 }
 
 /* =========================
-   7. Fichas (modal): o conteúdo muda conforme o local do clique
+   7. Fichas (modal)
    ========================= */
 
-// Monta uma tabela acessível; as células aceitam HTML.
 const tabela = (legenda, cabecalhos, linhas) => `
   <div class="tabela-rolagem" tabindex="0" role="region" aria-label="${escapar(legenda)}">
     <table>
@@ -614,7 +615,6 @@ const tabela = (legenda, cabecalhos, linhas) => `
     </table>
   </div>`;
 
-// Posição, média e melhor resultado de uma escola em uma plataforma
 function estatisticaPlataforma(chave, escola) {
   const config = PLATAFORMAS[chave];
   const campo = config.campoNota || config.campo;
@@ -623,8 +623,8 @@ function estatisticaPlataforma(chave, escola) {
   return {
     posicao: indice >= 0 ? indice + 1 : null,
     total: validas.length,
-    media: mediaRegistro(config, validas),   // registro médio (percentual e nota)
-    melhor: validas.length ? validas[0] : null  // escola com o melhor resultado
+    media: mediaRegistro(config, validas),
+    melhor: validas.length ? validas[0] : null
   };
 }
 
@@ -639,9 +639,7 @@ function tabelaPlataformas(escola) {
     }));
 }
 
-// Cada contexto devolve o rótulo da visão e o HTML das tabelas
 const FICHAS = {
-  // Clique no Top 5, no resumo ou nos destaques de ranking
   ranking: e => ({
     rotulo: "Visão: ranking geral",
     html: tabela(`Posição de ${e.nome} no ranking geral`, ["Indicador", "Resultado"], [
@@ -653,12 +651,11 @@ const FICHAS = {
     ]) + "<h3>Posição por plataforma</h3>" + tabelaPlataformas(e)
   }),
 
-  // Clique nas barras de uma plataforma
   plataforma: e => {
     const p = PLATAFORMAS[plataformaAtual];
     const est = estatisticaPlataforma(plataformaAtual, e);
     const tem = !semValor(e[p.campo]) && est.media !== null;
-    const campoDif = p.campoNota || p.campo; // diferença calculada na nota, quando houver
+    const campoDif = p.campoNota || p.campo; 
     const diferenca = !tem ? "Sem dado"
       : p.campoNota ? `${formatarNota(e[campoDif] - est.media[campoDif])} na nota`
       : numero(e[campoDif] - est.media[campoDif], p.casas);
@@ -674,7 +671,6 @@ const FICHAS = {
     };
   },
 
-  // Clique na tela Aluno Presente / IFA
   ifa: e => {
     const necessaria = mediaNecessaria(e);
     const periodos = [["Semanas 1 a 37", formatarPontos(e.presenca * 100), "Base consolidada"]];
@@ -695,7 +691,6 @@ const FICHAS = {
     };
   },
 
-  // Clique na tela Escolas (ficha completa)
   escolas: e => ({
     rotulo: "Visão: ficha completa",
     html: tabela(`Resumo de ${e.nome}`, ["Indicador", "Resultado"], [
@@ -725,7 +720,6 @@ function abrirFicha(codigo, contexto = "escolas") {
   mostrarModal();
 }
 
-// Clique no nome de um(a) supervisor(a): tabela com as escolas dele(a)
 function abrirSupervisor(nome) {
   const sup = rankingSupervisores().find(s => s.nome === nome);
   if (!sup) return;
@@ -749,7 +743,6 @@ function abrirSupervisor(nome) {
    ========================= */
 
 function configurarEventos() {
-  // Abertura da ficha por delegação: vale para qualquer tabela, mesmo após re-renderizar.
   document.addEventListener("click", evento => {
     const escola = evento.target.closest(".escola-link");
     if (escola) return abrirFicha(escola.dataset.codigo, escola.dataset.contexto);
@@ -758,7 +751,6 @@ function configurarEventos() {
     if (supervisor) abrirSupervisor(supervisor.dataset.supervisor);
   });
 
-  // Navegação entre telas
   $$(".menu-botao").forEach(botao => botao.addEventListener("click", () => {
     $$(".menu-botao").forEach(b => { b.classList.remove("ativo"); b.removeAttribute("aria-current"); }); botao.classList.add("ativo"); botao.setAttribute("aria-current", "page");      $$
 (".visao").forEach(secao => secao.classList.remove("ativa"));
@@ -766,7 +758,6 @@ function configurarEventos() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }));
 
-  // Filtros: cada campo chama a renderização da sua tela
   const ligar = (ids, evento, funcao) => ids.forEach(id => $(id).addEventListener(evento, funcao));
   ligar(["#busca-escola"], "input", renderizarEscolas);
   ligar(["#filtro-supervisor", "#ordenar-escolas"], "change", renderizarEscolas);
@@ -787,7 +778,6 @@ function configurarEventos() {
     renderizarIFA();
   });
 
-  // Calculadora
   $("#semana-calculadora").addEventListener("change", renderizarCalculadora);
   $("#responsavel-lancamento").addEventListener("change", renderizarCalculadora);
   $("#lancamento-grid").addEventListener("input", () => { calculadoraAlterada = true; });
@@ -797,7 +787,6 @@ function configurarEventos() {
   $("#exportar-lancamentos").addEventListener("click", exportarLancamentos);
   $("#restaurar-base").addEventListener("click", restaurarBase);
 
-  // Modal
   $("#fechar-modal").addEventListener("click", () => $("#modal-escola").close());
   $("#modal-escola").addEventListener("click", evento => {
     if (evento.target.id === "modal-escola") $("#modal-escola").close();
