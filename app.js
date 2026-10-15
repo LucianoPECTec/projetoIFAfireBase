@@ -32,7 +32,8 @@ if (typeof PLATAFORMAS !== "undefined" && !PLATAFORMAS.top3) {
    1. Utilidades e formatação
    ========================= */
 
-const $ = (seletor, raiz = document) => raiz.querySelector(seletor); const $$ = (seletor, raiz = document) => Array.from(raiz.querySelectorAll(seletor));
+const $ = (seletor, raiz = document) => raiz.querySelector(seletor);
+const $$ = (seletor, raiz = document) => Array.from(raiz.querySelectorAll(seletor));
 
 const semValor = valor => valor === null || valor === undefined || valor === "";
 const media = (lista, extrair) => lista.reduce((t, item) => t + extrair(item), 0) / lista.length;
@@ -55,12 +56,15 @@ const formatarNota = valor => semValor(valor)
 const formatarPlataforma = (config, valor) => semValor(valor) ? "Sem dado"
   : config.formato === "percentual" ? `${numero(valor * 100, 2)}%` : numero(valor, config.casas);
 
-// Layout de 2 colunas para as fichas (modal)
-function textoValor(config, registro) {
+// CORREÇÃO AQUI: Adicionado parâmetro apenasTexto para não quebrar a barra de resumo
+function textoValor(config, registro, apenasTexto = false) {
   if (!registro || semValor(registro[config.campo])) return "Sem dado";
   const principal = formatarPlataforma(config, registro[config.campo]);
   
   if (config.campoNota) {
+    if (apenasTexto) {
+        return `Nota ${formatarNota(registro[config.campoNota])} (${principal})`;
+    }
     return `<div class="duas-colunas-tabela">
               <span><strong>Nota:</strong> ${formatarNota(registro[config.campoNota])}</span> 
               <span><strong>Percentual:</strong> ${principal}</span>
@@ -90,7 +94,6 @@ function preencherTabela(id, linhas, colunasVazio = 1) {
     : `<tr><td colspan="${colunasVazio}" class="sem-dado">Nenhum resultado disponível.</td></tr>`;
 }
 
-// Novo sistema de avisos flutuantes (Toast)
 function avisar(texto, erro = false) {
   const area = $("#status-painel");
   if (area) area.textContent = texto;
@@ -114,7 +117,6 @@ function avisar(texto, erro = false) {
    2. Armazenamento dos lançamentos (Firebase)
    ========================= */
 
-// Inicialização do Firebase com chaves reais da URE
 const firebaseConfig = {
   apiKey: "AIzaSyCG3259iTf9HRkIUbS5PGzSm5DOUXhlB0Y",
   authDomain: "monitoramento-ure-sjrp.firebaseapp.com",
@@ -441,8 +443,9 @@ function renderizarPlataformas() {
     ? "Ranqueado pela nota da plataforma. Barras proporcionais à maior nota. Selecione a escola para ver a ficha."
     : "Barras proporcionais ao melhor resultado. Selecione a escola para ver a ficha.";
   
+  // CORREÇÃO: Passado `true` para a função textoValor no resumo para não injetar divs HTML
   $("#resumo-plataforma").textContent = ordenadas.length
-    ? `${ordenadas.length} de ${ESCOLAS.length} escolas com resultado · Média da URE: ${textoValor(config, mediaRegistro(config, ordenadas))} · Melhor resultado: ${textoValor(config, ordenadas[0])}`
+    ? `${ordenadas.length} de ${ESCOLAS.length} escolas com resultado · Média da URE: ${textoValor(config, mediaRegistro(config, ordenadas), true)} · Melhor resultado: ${textoValor(config, ordenadas[0], true)}`
     : "Nenhuma escola com resultado nesta plataforma.";
 
   $("#barras-plataforma").innerHTML = ordenadas
