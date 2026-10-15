@@ -152,7 +152,15 @@ h4 { margin: 0 0 8px; color: var(--azul-escuro); font-size: .92rem; }
 .periodo-titulo { margin: 0 0 6px; color: inherit; font-size: .85rem; letter-spacing: .04em; text-transform: uppercase; }
 .periodo-detalle { font-size: .9rem; }
 
-.navegacao { margin-top: 26px; }
+/* FIXA O MENU DE NAVEGAÇÃO NO TOPO */
+.navegacao { 
+  margin-top: 26px; 
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: linear-gradient(135deg, var(--azul-escuro), var(--azul-medio));
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
 
 .menu {
   display: flex;
