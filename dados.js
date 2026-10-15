@@ -299,27 +299,6 @@ const ESCOLAS = [
     supervisor: "DINAMARCA DA SILVA"
   },
   {
-    posicao: 12,
-    nome: "NAIR SANTOS CUNHA PROFESSORA",
-    codigo: "28678",
-    top3: 1,
-    top5: 1,
-    top10: 4,
-    posicaoMedia: 15.3,
-    notaFinal: 9.127136417509721,
-    tarefa: 0.46027673170149674,
-    redacao: 0.7281344248168893,
-    leia: 859.0875355450241,
-    speak: 0.432,
-    alura: 3.8250180115273773,
-    matific: 2.2180185084376705,
-    khan: 2.0149147727272734,
-    notaTarefa: 6.570182221599514,
-    presenca: 0.843,
-    ifa: 84.0,
-    supervisor: null
-  },
-  {
     posicao: 13,
     nome: "ALBERTO ANDALO",
     codigo: "28538",
