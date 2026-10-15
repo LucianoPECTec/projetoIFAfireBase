@@ -42,12 +42,7 @@ function moldura(titulo, subtitulo, altura, corpo) {
 function legenda(itens, y) {
   let x = 28;
   return itens.map(i => {
-    // Se for o marcador de linha da meta individual, desenha um traço invés de quadrado
-    const icone = i.isLine 
-      ? `<line x1="${x + 6}" y1="${y - 12}" x2="${x + 6}" y2="${y + 2}" stroke="${i.cor}" stroke-width="4" stroke-linecap="round"/>`
-      : `<rect x="${x}" y="${y - 10}" width="12" height="12" rx="3" fill="${i.cor}"/>`;
-      
-    const bloco = `${icone}
+    const bloco = `<rect x="${x}" y="${y - 10}" width="12" height="12" rx="3" fill="${i.cor}"/>
       <text x="${x + 18}" y="${y}" font-size="12" fill="${COR.texto}">${escapar(i.rotulo)}</text>`;
     x += 54 + i.rotulo.length * 7.2;
     return bloco;
@@ -66,20 +61,13 @@ function barras({ titulo, subtitulo, itens, min = 0, max, ref, chaves }) {
 
   const corpo = itens.map((it, i) => {
     const y = topo + i * linha;
-    
-    // Traço limpo e visível para a Meta Individual da Escola
-    const tracoMeta = it.meta 
-      ? `<line x1="${x(it.meta)}" y1="${y + 2}" x2="${x(it.meta)}" y2="${y + 22}" stroke="${COR.escuro}" stroke-width="3" stroke-linecap="round"/>`
-      : "";
-
     return `<text x="${rotuloX - 10}" y="${y + 16}" text-anchor="end" font-size="13" fill="${COR.texto}">${escapar(it.rotulo)}</text>
     <rect x="${rotuloX}" y="${y + 4}" width="${area}" height="16" rx="8" fill="${COR.trilho}"/>
     <rect x="${rotuloX}" y="${y + 4}" width="${Math.max(x(it.valor) - rotuloX, 0)}" height="16" rx="8" fill="${it.cor || COR.azul}"/>
-    ${tracoMeta}
     <text x="${rotuloX + area + 12}" y="${y + 17}" font-size="13" font-weight="700" fill="${COR.escuro}">${escapar(it.texto)}</text>`;
   }).join("");
 
-  // Linha de Referência da URE (Desenhada APÓS as barras para ficar por cima)
+  // Linha da Meta URE renderizada no final para ficar sobre as barras
   const meta = ref ? `<line x1="${x(ref.valor)}" y1="${topo - 4}" x2="${x(ref.valor)}" y2="${topo + itens.length * linha}" stroke="${COR.escuro}" stroke-width="2" stroke-dasharray="5 4"/>
     <text x="${x(ref.valor)}" y="${topo - 10}" text-anchor="middle" font-size="12" font-weight="700" fill="${COR.escuro}">${escapar(ref.rotulo)}</text>` : "";
 
@@ -201,28 +189,19 @@ const GRAFICOS = [
   },
   {
     id: "presenca-ifa",
-    gerar: () => {
-      // Configuração da legenda unificada (cores + marcador de meta)
-      const chavesLegenda = [
-        ...Object.entries(COR_SITUACAO).map(([rotulo, cor]) => ({ rotulo, cor })),
-        { rotulo: "IFA da Escola", cor: COR.escuro, isLine: true }
-      ];
-
-      return barras({
-        titulo: "Presença consolidada × IFA da Escola",
-        subtitulo: "Traço = IFA da Escola · Linha tracejada = IFA da URE",
-        min: 70, max: 100, 
-        chaves: chavesLegenda,
-        ref: { valor: CONFIG.ifaURE, rotulo: `IFA da URE ${numero(CONFIG.ifaURE, 1)}%` },
-        itens: [...ESCOLAS].sort((a, b) => presencaAtual(b).media - presencaAtual(a).media).map(e => ({
-          rotulo: nomeCurto(e.nome, 34), 
-          valor: presencaAtual(e).media, 
-          meta: e.ifa, // Aciona o marcador de meta na barra
-          texto: `${formatarPontos(presencaAtual(e).media)} (IFA: ${numero(e.ifa, 1)}%)`, // Texto igual ao da tabela
-          cor: COR_SITUACAO[situacaoIFA(e)]
-        }))
-      });
-    }
+    gerar: () => barras({
+      titulo: "Presença consolidada × IFA da URE",
+      subtitulo: "O traço vertical cruza as barras marcando a meta geral de presença da URE",
+      min: 70, max: 100, 
+      chaves: Object.entries(COR_SITUACAO).map(([rotulo, cor]) => ({ rotulo, cor })),
+      ref: { valor: CONFIG.ifaURE, rotulo: `IFA da URE ${numero(CONFIG.ifaURE, 1)}%` },
+      itens: [...ESCOLAS].sort((a, b) => presencaAtual(b).media - presencaAtual(a).media).map(e => ({
+        rotulo: nomeCurto(e.nome, 34), 
+        valor: presencaAtual(e).media, 
+        texto: `${formatarPontos(presencaAtual(e).media)} (Meta: ${numero(e.ifa, 1)}%)`,
+        cor: COR_SITUACAO[situacaoIFA(e)]
+      }))
+    })
   },
   {
     id: "situacao-ifa",
