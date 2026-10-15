@@ -3,9 +3,6 @@
    Arquivo: graficos.js  |  Escopo: ESCOLAS REGULARES
    ---------------------------------------------------------
    Gráficos em SVG puro (sem bibliotecas), com download em PNG e SVG.
-   Seções: 1. Cores e utilidades  2. Tipos de gráfico
-           3. Catálogo de gráficos  4. Tela e downloads
-   Usa funções do app.js (numero, formatarNota, presencaAtual etc.).
    ========================================================= */
 "use strict";
 
@@ -23,16 +20,14 @@ const LARGURA = 760;
 const FONTE = 'font-family="system-ui, Segoe UI, Roboto, Arial, sans-serif"';
 const COR_SITUACAO = { "Dentro do IFA": COR.verde, "Em acompanhamento": COR.amarelo, "Fora do alcance da meta": COR.vermelho };
 
-// "PEDRO ELIAS PROFESSOR" → "Pedro Elias Professor" (legível e curto)
 function nomeCurto(nome, limite = 30) {
   const pequenas = ["da", "de", "do", "das", "dos", "e"];
   const texto = nome.toLowerCase().split(" ")
-    .map((p, i) => /^(i{1,3}|iv|v)$/.test(p) ? p.toUpperCase()   // numerais romanos (II, III)
+    .map((p, i) => /^(i{1,3}|iv|v)$/.test(p) ? p.toUpperCase() 
       : (i && pequenas.includes(p)) ? p : p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
   return texto.length > limite ? texto.slice(0, limite - 1) + "…" : texto;
 }
 
-// Moldura comum: fundo branco, faixa azul, título, subtítulo e rodapé.
 function moldura(titulo, subtitulo, altura, corpo) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${LARGURA} ${altura}" width="${LARGURA}" height="${altura}" role="img" aria-label="${escapar(titulo)}. ${escapar(subtitulo)}" ${FONTE}>
   <rect width="${LARGURA}" height="${altura}" rx="16" fill="#fff"/>
@@ -44,7 +39,6 @@ function moldura(titulo, subtitulo, altura, corpo) {
 </svg>`;
 }
 
-// Legenda em linha (quadradinho colorido + texto)
 function legenda(itens, y) {
   let x = 28;
   return itens.map(i => {
@@ -59,7 +53,7 @@ function legenda(itens, y) {
    2. Tipos de gráfico
    ========================= */
 
-// Barras horizontais: rótulo à esquerda, valor à direita; `ref` desenha uma linha de meta.
+// Barras horizontais clássicas com suporte para marcador de META
 function barras({ titulo, subtitulo, itens, min = 0, max, ref, chaves }) {
   const topo = chaves ? 124 : 104, linha = 30, rotuloX = 275, area = 335;
   const altura = topo + itens.length * linha + 46;
@@ -68,9 +62,17 @@ function barras({ titulo, subtitulo, itens, min = 0, max, ref, chaves }) {
 
   const corpo = itens.map((it, i) => {
     const y = topo + i * linha;
+    
+    // Injeção visual do marcador de Meta Individual dentro da barra
+    const tracoMeta = it.meta 
+      ? `<line x1="${x(it.meta)}" y1="${y + 2}" x2="${x(it.meta)}" y2="${y + 22}" stroke="${COR.escuro}" stroke-width="2.5"/>
+         <text x="${x(it.meta)}" y="${y - 1}" font-size="10" font-weight="700" fill="${COR.suave}" text-anchor="middle">Meta</text>`
+      : "";
+
     return `<text x="${rotuloX - 10}" y="${y + 16}" text-anchor="end" font-size="13" fill="${COR.texto}">${escapar(it.rotulo)}</text>
     <rect x="${rotuloX}" y="${y + 4}" width="${area}" height="16" rx="8" fill="${COR.trilho}"/>
-    <rect x="${rotuloX}" y="${y + 4}" width="${x(it.valor) - rotuloX}" height="16" rx="8" fill="${it.cor || COR.azul}"/>
+    <rect x="${rotuloX}" y="${y + 4}" width="${Math.max(x(it.valor) - rotuloX, 0)}" height="16" rx="8" fill="${it.cor || COR.azul}"/>
+    ${tracoMeta}
     <text x="${rotuloX + area + 12}" y="${y + 17}" font-size="13" font-weight="700" fill="${COR.escuro}">${escapar(it.texto)}</text>`;
   }).join("");
 
@@ -80,7 +82,31 @@ function barras({ titulo, subtitulo, itens, min = 0, max, ref, chaves }) {
   return moldura(titulo, sub, altura, (chaves ? legenda(chaves, 92) : "") + meta + corpo);
 }
 
-// Rosca com legenda: ideal para proporções (ex.: situação do IFA).
+// NOVO: Gráfico Divergente para mostrar o Impacto (+/-)
+function divergentes({ titulo, subtitulo, itens, min, max }) {
+  const topo = 104, linha = 30, rotuloX = 275, area = 335;
+  const altura = topo + itens.length * linha + 46;
+  
+  // O zero fica centralizado dinamicamente
+  const x = v => rotuloX + ((v - min) / (max - min)) * area;
+  const zeroX = x(0);
+
+  const corpo = itens.map((it, i) => {
+    const y = topo + i * linha;
+    const width = Math.abs(x(it.valor) - zeroX);
+    const bx = it.valor < 0 ? x(it.valor) : zeroX;
+    
+    const tx = it.valor < 0 ? bx - 8 : bx + width + 8;
+    const tAnchor = it.valor < 0 ? "end" : "start";
+
+    return `<text x="${rotuloX - 10}" y="${y + 16}" text-anchor="end" font-size="13" fill="${COR.texto}">${escapar(it.rotulo)}</text>
+    <rect x="${bx}" y="${y + 4}" width="${Math.max(width, 2)}" height="16" rx="4" fill="${it.cor}"/>
+    <text x="${tx}" y="${y + 17}" text-anchor="${tAnchor}" font-size="13" font-weight="700" fill="${COR.escuro}">${escapar(it.texto)}</text>`;
+  }).join("");
+
+  return moldura(titulo, subtitulo, altura, `<line x1="${zeroX}" y1="${topo - 4}" x2="${zeroX}" y2="${topo + itens.length * linha}" stroke="${COR.escuro}" stroke-width="2" stroke-dasharray="4 4"/>` + corpo);
+}
+
 function rosca({ titulo, subtitulo, itens }) {
   const total = itens.reduce((t, i) => t + i.valor, 0) || 1;
   const cx = 190, cy = 230, r = 100, espessura = 44, C = 2 * Math.PI * r;
@@ -104,7 +130,6 @@ function rosca({ titulo, subtitulo, itens }) {
     <text x="${cx}" y="${cy + 28}" text-anchor="middle" font-size="13" fill="${COR.suave}">escolas</text>${itensLegenda}`);
 }
 
-// Colunas verticais: evolução por semana; valor nulo vira coluna tracejada ("Prevista").
 function colunas({ titulo, subtitulo, itens, min = 0, max, ref }) {
   const x0 = 70, area = 650, base = 350, alto = 220, largura = area / itens.length;
   const y = v => base - ((v - min) / (max - min)) * alto;
@@ -148,18 +173,27 @@ const GRAFICOS = [
     })
   },
   {
-    id: "plataforma",
+    id: "impacto-ifa",
     gerar: () => {
-      const config = PLATAFORMAS[plataformaGrafico];
-      const campo = config.campoNota || config.campo;
-      const lista = ESCOLAS.filter(e => !semValor(e[campo])).sort((a, b) => b[campo] - a[campo]);
-      return barras({
-        titulo: `${config.nome} — resultado por escola`,
-        subtitulo: config.campoNota ? "Ranqueado pela nota (nota · percentual)" : "Do maior para o menor resultado",
-        min: 0, max: lista.length ? lista[0][campo] : 1,
-        itens: lista.map((e, i) => ({
-          rotulo: `${i + 1}º ${nomeCurto(e.nome, 28)}`, valor: e[campo], cor: medalha(i),
-          texto: config.campoNota ? `${formatarNota(e[config.campoNota])} · ${formatarPlataforma(config, e[config.campo])}` : formatarPlataforma(config, e[campo])
+      const N = ESCOLAS.length;
+      // Cálculo do Impacto Matemático da Escola na URE
+      const dados = ESCOLAS.map(e => {
+        const impacto = (presencaAtual(e).media - CONFIG.ifaURE) / N;
+        return { e, impacto };
+      }).sort((a, b) => b.impacto - a.impacto);
+
+      const valores = dados.map(d => d.impacto);
+      const limite = Math.max(Math.abs(Math.min(...valores)), Math.abs(Math.max(...valores))) * 1.15;
+
+      return divergentes({
+        titulo: "Impacto no IFA da URE",
+        subtitulo: "Quantos pontos percentuais exatos (+/-) cada escola contribui para a média geral da URE",
+        min: -limite, max: limite,
+        itens: dados.map(({ e, impacto }) => ({
+          rotulo: nomeCurto(e.nome, 34),
+          valor: impacto,
+          texto: `${impacto > 0 ? '+' : ''}${numero(impacto, 3)}%`,
+          cor: impacto >= 0 ? COR.verde : COR.vermelho
         }))
       });
     }
@@ -168,11 +202,14 @@ const GRAFICOS = [
     id: "presenca-ifa",
     gerar: () => barras({
       titulo: "Presença consolidada × IFA",
-      subtitulo: "Cor = situação em relação ao IFA da própria escola · linha = IFA da URE",
+      subtitulo: "Traço e valor = Meta da escola · Linha tracejada = IFA da URE",
       min: 70, max: 100, chaves: Object.entries(COR_SITUACAO).map(([rotulo, cor]) => ({ rotulo, cor })),
       ref: { valor: CONFIG.ifaURE, rotulo: `IFA da URE ${numero(CONFIG.ifaURE, 1)}%` },
       itens: [...ESCOLAS].sort((a, b) => presencaAtual(b).media - presencaAtual(a).media).map(e => ({
-        rotulo: nomeCurto(e.nome, 34), valor: presencaAtual(e).media, texto: formatarPontos(presencaAtual(e).media),
+        rotulo: nomeCurto(e.nome, 34), 
+        valor: presencaAtual(e).media, 
+        meta: e.ifa, // Aciona o marcador de meta
+        texto: `${formatarPontos(presencaAtual(e).media)} (Meta: ${numero(e.ifa, 1)}%)`, 
         cor: COR_SITUACAO[situacaoIFA(e)]
       }))
     })
@@ -212,6 +249,23 @@ const GRAFICOS = [
         itens: semanas, min: 60, max: 100, ref: { valor: CONFIG.ifaURE, rotulo: `IFA da URE ${numero(CONFIG.ifaURE, 1)}%` }
       });
     }
+  },
+  {
+    id: "plataforma",
+    gerar: () => {
+      const config = PLATAFORMAS[plataformaGrafico];
+      const campo = config.campoNota || config.campo;
+      const lista = ESCOLAS.filter(e => !semValor(e[campo])).sort((a, b) => b[campo] - a[campo]);
+      return barras({
+        titulo: `${config.nome} — resultado por escola`,
+        subtitulo: config.campoNota ? "Ranqueado pela nota (nota · percentual)" : "Do maior para o menor resultado",
+        min: 0, max: lista.length ? lista[0][campo] : 1,
+        itens: lista.map((e, i) => ({
+          rotulo: `${i + 1}º ${nomeCurto(e.nome, 28)}`, valor: e[campo], cor: medalha(i),
+          texto: config.campoNota ? `${formatarNota(e[config.campoNota])} · ${formatarPlataforma(config, e[config.campo])}` : formatarPlataforma(config, e[campo])
+        }))
+      });
+    }
   }
 ];
 
@@ -219,7 +273,7 @@ const GRAFICOS = [
    4. Tela e downloads
    ========================= */
 
-const svgsAtuais = {}; // id → texto SVG (usado nos downloads)
+const svgsAtuais = {};
 
 function renderizarGraficos() {
   const area = $("#area-graficos");
@@ -250,7 +304,6 @@ function salvarArquivo(blob, nome) {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
-// PNG em 2× (nítido em slides e relatórios), gerado a partir do SVG.
 function baixarGrafico(id, formato) {
   const nome = `grafico-${id}-semana-${CONFIG.semanasConcluidas}`;
   const svg = svgsAtuais[id];
