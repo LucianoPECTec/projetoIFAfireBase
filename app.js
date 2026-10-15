@@ -4,11 +4,11 @@
    ---------------------------------------------------------
    Seções:
    1. Utilidades e formatação
-   2. Armazenamento dos lançamentos (Firebase)
+   2. Armazenamento dos lançamentos (Firebase: IFA e Plataformas)
    3. Cálculos do IFA e da projeção
    4. Rankings (Top 5 e supervisores)
    5. Renderização das telas
-   6. Calculadora semanal
+   6. Calculadora semanal (IFA e Plataformas)
    7. Fichas
    8. Inicialização
    ========================================================= */
@@ -32,8 +32,7 @@ if (typeof PLATAFORMAS !== "undefined" && !PLATAFORMAS.top3) {
    1. Utilidades e formatação
    ========================= */
 
-const $ = (seletor, raiz = document) => raiz.querySelector(seletor);
-const $$ = (seletor, raiz = document) => Array.from(raiz.querySelectorAll(seletor));
+const $ = (seletor, raiz = document) => raiz.querySelector(seletor); const $$ = (seletor, raiz = document) => Array.from(raiz.querySelectorAll(seletor));
 
 const semValor = valor => valor === null || valor === undefined || valor === "";
 const media = (lista, extrair) => lista.reduce((t, item) => t + extrair(item), 0) / lista.length;
@@ -56,7 +55,6 @@ const formatarNota = valor => semValor(valor)
 const formatarPlataforma = (config, valor) => semValor(valor) ? "Sem dado"
   : config.formato === "percentual" ? `${numero(valor * 100, 2)}%` : numero(valor, config.casas);
 
-// CORREÇÃO AQUI: Adicionado parâmetro apenasTexto para não quebrar a barra de resumo
 function textoValor(config, registro, apenasTexto = false) {
   if (!registro || semValor(registro[config.campo])) return "Sem dado";
   const principal = formatarPlataforma(config, registro[config.campo]);
@@ -129,6 +127,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const docRefIFA = db.collection("monitoramento").doc("lancamentosIFA");
+const docRefPlat = db.collection("monitoramento").doc("lancamentosPlataformas"); // Novo DB Plataformas
 
 function mesclarLancamentos(base, local) {
   const resultado = structuredClone(base || {});
@@ -138,11 +137,10 @@ function mesclarLancamentos(base, local) {
   return resultado;
 }
 
-function sincronizacaoAtiva() {
-  return true; 
-}
+function sincronizacaoAtiva() { return true; }
 
 let lancamentos = typeof LANCAMENTOS_SEMANAIS !== "undefined" ? structuredClone(LANCAMENTOS_SEMANAIS) : {};
+let lancamentosPlat = {}; // Guarda os lançamentos das plataformas: [plataforma][semana][escola]
 
 function definirSincronizacao(texto, alerta = false) {
   const area = $("#status-sincronizacao");
@@ -154,17 +152,22 @@ function definirSincronizacao(texto, alerta = false) {
 async function carregarRemoto() {
   if (!sincronizacaoAtiva()) return;
   try {
-    const docSnap = await docRefIFA.get();
+    const snapIFA = await docRefIFA.get();
+    const snapPlat = await docRefPlat.get();
     
-    if (docSnap.exists) {
-      lancamentos = mesclarLancamentos(typeof LANCAMENTOS_SEMANAIS !== "undefined" ? LANCAMENTOS_SEMANAIS : {}, docSnap.data());
+    if (snapIFA.exists) {
+      lancamentos = mesclarLancamentos(typeof LANCAMENTOS_SEMANAIS !== "undefined" ? LANCAMENTOS_SEMANAIS : {}, snapIFA.data());
+    }
+    
+    if (snapPlat.exists) {
+      lancamentosPlat = snapPlat.data();
     } else {
-      await docRefIFA.set({});
-      lancamentos = mesclarLancamentos(typeof LANCAMENTOS_SEMANAIS !== "undefined" ? LANCAMENTOS_SEMANAIS : {}, {});
+      await docRefPlat.set({});
     }
 
     atualizarTudo();
-    if (typeof calculadoraAlterada !== 'undefined' && !calculadoraAlterada && typeof renderizarCalculadora === 'function') renderizarCalculadora();
+    if (typeof renderizarCalculadora === 'function') renderizarCalculadora();
+    if (typeof renderizarCalculadoraPlat === 'function') renderizarCalculadoraPlat();
     definirSincronizacao("Base Firebase conectada: os lançamentos ficam salvos para todos.");
   } catch (erro) {
     console.warn("Falha ao ler a base do Firebase.", erro);
@@ -174,19 +177,12 @@ async function carregarRemoto() {
 
 async function enviarRemoto(registros, responsavel) {
   const dadosParaSalvar = {};
-  
   registros.forEach(reg => {
-    if (!dadosParaSalvar[reg.semana]) {
-      dadosParaSalvar[reg.semana] = {};
-    }
+    if (!dadosParaSalvar[reg.semana]) dadosParaSalvar[reg.semana] = {};
     dadosParaSalvar[reg.semana][reg.codigo] = reg.valor;
   });
-
   await docRefIFA.set(dadosParaSalvar, { merge: true });
-
-  if (typeof aplicarRegistro === 'function') {
-    registros.forEach(aplicarRegistro);
-  }
+  if (typeof aplicarRegistro === 'function') registros.forEach(aplicarRegistro);
 }
 
 const salvarLancamentos = () => {};
@@ -443,7 +439,6 @@ function renderizarPlataformas() {
     ? "Ranqueado pela nota da plataforma. Barras proporcionais à maior nota. Selecione a escola para ver a ficha."
     : "Barras proporcionais ao melhor resultado. Selecione a escola para ver a ficha.";
   
-  // CORREÇÃO: Passado `true` para a função textoValor no resumo para não injetar divs HTML
   $("#resumo-plataforma").textContent = ordenadas.length
     ? `${ordenadas.length} de ${ESCOLAS.length} escolas com resultado · Média da URE: ${textoValor(config, mediaRegistro(config, ordenadas), true)} · Melhor resultado: ${textoValor(config, ordenadas[0], true)}`
     : "Nenhuma escola com resultado nesta plataforma.";
@@ -510,12 +505,13 @@ function atualizarTudo() {
 }
 
 /* =========================
-   6. Calculadora semanal (Layout Lista/Tabela)
+   6. Calculadoras (IFA e PLATAFORMAS)
    ========================= */
 
 const TODAS = "__todas__";
 let calculadoraAlterada = false;
 
+// ------- A. Lançamento IFA -------
 function preencherResponsaveis() {
   const select = $("#responsavel-lancamento");
   select.add(new Option("Todas as escolas da URE", TODAS));
@@ -583,16 +579,92 @@ async function calcularSemana() {
     }
     atualizarTudo();
     renderizarCalculadora();
-    avisar(sincronizacaoAtiva()
-      ? `Semana ${semana} salva na base Firebase.`
-      : `Semana ${semana} salva neste navegador.`);
+    avisar(sincronizacaoAtiva() ? `Semana ${semana} salva na base Firebase.` : `Semana ${semana} salva neste navegador.`);
   } catch (erro) {
     console.error(erro);
-    avisar("Não foi possível salvar na base Firebase. Confira a internet e tente de novo.", true);
+    avisar("Não foi possível salvar na base Firebase. Confira a internet.", true);
   } finally {
     botao.disabled = false;
   }
 }
+
+// ------- B. Lançamento Plataformas -------
+function preencherFiltrosPlataformas() {
+  const selResp = $("#responsavel-plat");
+  selResp.add(new Option("Todas as Escolas (Visão Dirigente)", TODAS));
+  [...new Set(ESCOLAS.map(e => e.supervisor).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .forEach(nome => selResp.add(new Option(`Supervisor(a): ${nome}`, nome)));
+
+  const selPlat = $("#plat-selecionada");
+  Object.entries(PLATAFORMAS).forEach(([chave, p]) => {
+    if (chave !== 'top3') selPlat.add(new Option(p.nome, chave));
+  });
+}
+
+function renderizarCalculadoraPlat() {
+  const plat = $("#plat-selecionada").value;
+  const semana = Number($("#semana-plat").value);
+  const resp = $("#responsavel-plat").value;
+  const busca = ($("#busca-plat-calc").value || "").trim().toLowerCase();
+  
+  if (!lancamentosPlat[plat]) lancamentosPlat[plat] = {};
+  if (!lancamentosPlat[plat][semana]) lancamentosPlat[plat][semana] = {};
+
+  const lista = (resp === TODAS ? ESCOLAS : ESCOLAS.filter(e => e.supervisor === resp))
+                .filter(e => correspondeBusca(e, busca));
+
+  $("#lancamento-grid-plat").innerHTML = lista.length ? lista.map(e => `
+    <article class="lancamento-linha">
+      <h4>${escapar(e.nome)} <small class="codigo-escola">(${e.codigo})</small></h4>
+      <input type="number" data-codigo="${e.codigo}" min="0" step="0.01"
+             inputmode="decimal" value="${lancamentosPlat[plat][semana][e.codigo] ?? ""}" placeholder="Valor (0 a 10)">
+    </article>`).join("")
+    : '<p class="sem-dado" style="padding: 20px; text-align: center;">Nenhuma escola encontrada com os filtros atuais.</p>';
+}
+
+async function salvarPlataformasSemana() {
+  const plat = $("#plat-selecionada").value;
+  const semana = Number($("#semana-plat").value); const registros = [];    for (const campo of $$("#lancamento-grid-plat input")) {
+    const texto = campo.value.trim();
+    const valor = Number(texto);
+    if (texto !== "" && (Number.isNaN(valor) || valor < 0)) {
+      avisar(`Valor inválido para a escola ${campo.dataset.codigo}.`, true);
+      campo.focus();
+      return;
+    }
+    const novo = texto === "" ? null : valor;
+    if (novo !== (lancamentosPlat[plat]?.[semana]?.[campo.dataset.codigo] ?? null)) {
+      registros.push({ codigo: campo.dataset.codigo, valor: novo });
+    }
+  }
+  
+  if (!registros.length) return avisar("Nenhuma alteração para salvar.");
+
+  const botao = $("#salvar-plat");
+  botao.disabled = true;
+  try {
+    if (!lancamentosPlat[plat]) lancamentosPlat[plat] = {};
+    if (!lancamentosPlat[plat][semana]) lancamentosPlat[plat][semana] = {};
+    
+    registros.forEach(r => {
+       if (r.valor === null) delete lancamentosPlat[plat][semana][r.codigo];
+       else lancamentosPlat[plat][semana][r.codigo] = r.valor;
+    });
+
+    await docRefPlat.set(lancamentosPlat, { merge: true });
+    
+    avisar(`Dados de ${PLATAFORMAS[plat].nome} (Semana ${semana}) salvos com sucesso na nuvem!`);
+    renderizarCalculadoraPlat();
+  } catch (erro) {
+    console.error(erro);
+    avisar("Erro ao salvar no Firebase. Verifique a internet.", true);
+  } finally {
+    botao.disabled = false;
+  }
+}
+
+// -----------------------------------------
 
 function exportarLancamentos() {
   const blob = new Blob([JSON.stringify(lancamentos, null, 2)], { type: "application/json" });
@@ -788,14 +860,22 @@ function configurarEventos() {
     renderizarIFA();
   });
 
+  // Eventos da Calculadora IFA
   $("#semana-calculadora").addEventListener("change", renderizarCalculadora);
   $("#responsavel-lancamento").addEventListener("change", renderizarCalculadora);
   $("#busca-calculadora").addEventListener("input", renderizarCalculadora);
   $("#lancamento-grid").addEventListener("input", () => { calculadoraAlterada = true; });
+  $("#calcular-semana").addEventListener("click", calcularSemana);
   
+  // Eventos da Calculadora de Plataformas
+  $("#plat-selecionada").addEventListener("change", renderizarCalculadoraPlat);
+  $("#semana-plat").addEventListener("change", renderizarCalculadoraPlat);
+  $("#responsavel-plat").addEventListener("change", renderizarCalculadoraPlat);
+  $("#busca-plat-calc").addEventListener("input", renderizarCalculadoraPlat);
+  $("#salvar-plat").addEventListener("click", salvarPlataformasSemana);
+
   document.addEventListener("visibilitychange", () => { if (!document.hidden) carregarRemoto(); });
   $("#restaurar-base").hidden = sincronizacaoAtiva();
-  $("#calcular-semana").addEventListener("click", calcularSemana);
   $("#exportar-lancamentos").addEventListener("click", exportarLancamentos);
   $("#restaurar-base").addEventListener("click", restaurarBase);
 
@@ -809,10 +889,12 @@ function iniciar() {
   configurarEventos();
   preencherSupervisores();
   preencherResponsaveis();
+  preencherFiltrosPlataformas(); // Novo
   montarAbasPlataforma();
   atualizarTudo();
   renderizarPlataformas();
   renderizarCalculadora();
+  renderizarCalculadoraPlat(); // Novo
   definirSincronizacao(sincronizacaoAtiva()
     ? "Conectando à base Firebase…"
     : "Modo local: os lançamentos ficam salvos apenas neste navegador.");
