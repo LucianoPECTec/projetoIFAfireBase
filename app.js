@@ -15,10 +15,10 @@
 "use strict";
 
 const CHAVE_ARMAZENAMENTO = "lancamentosIFA-URE-SJRP";
-const LIMITE_ATENCAO = 90; // média necessária a partir da qual a escola pede atenção
+const LIMITE_ATENCAO = 90; 
 
 // ==========================================
-// Injeção Dinâmica: Adiciona a aba de Classificação Total no painel
+// Injeção Dinâmica: Aba de Classificação Total no painel
 // ==========================================
 if (typeof PLATAFORMAS !== "undefined" && !PLATAFORMAS.top3) {
   PLATAFORMAS.top3 = { 
@@ -114,7 +114,7 @@ function avisar(texto, erro = false) {
    2. Armazenamento dos lançamentos (Firebase)
    ========================= */
 
-// Inicialização do Firebase (Chaves Reais)
+// Inicialização do Firebase com chaves reais da URE
 const firebaseConfig = {
   apiKey: "AIzaSyCG3259iTf9HRkIUbS5PGzSm5DOUXhlB0Y",
   authDomain: "monitoramento-ure-sjrp.firebaseapp.com",
@@ -445,7 +445,6 @@ function renderizarPlataformas() {
     ? `${ordenadas.length} de ${ESCOLAS.length} escolas com resultado · Média da URE: ${textoValor(config, mediaRegistro(config, ordenadas))} · Melhor resultado: ${textoValor(config, ordenadas[0])}`
     : "Nenhuma escola com resultado nesta plataforma.";
 
-  // Layout de 2 Colunas para o Card da Plataforma
   $("#barras-plataforma").innerHTML = ordenadas
     .map((e, i) => ({ e, n: i + 1 }))
     .filter(({ e }) => correspondeBusca(e, busca))
@@ -508,7 +507,7 @@ function atualizarTudo() {
 }
 
 /* =========================
-   6. Calculadora semanal
+   6. Calculadora semanal (Layout Lista/Tabela)
    ========================= */
 
 const TODAS = "__todas__";
@@ -531,19 +530,20 @@ function escolasDoResponsavel() {
 function renderizarCalculadora() {
   const semana = Number($("#semana-calculadora").value);
   lancamentos[semana] ??= {};
-  const lista = escolasDoResponsavel();
+  
+  const busca = ($("#busca-calculadora").value || "").trim().toLowerCase();
+  const lista = escolasDoResponsavel().filter(e => correspondeBusca(e, busca));
+  
   calculadoraAlterada = false;
 
   $("#lancamento-grid").innerHTML = lista.length ? lista.map(e => `
-    <article class="lancamento">
-      <h4>${escapar(nomeCompleto(e))}</h4>
-      <label class="sr-only" for="input-${e.codigo}">
-        Presença da semana ${semana} — ${escapar(nomeCompleto(e))}
-      </label>
+    <article class="lancamento-linha">
+      <h4>${escapar(e.nome)} <small class="codigo-escola">(${e.codigo})</small></h4>
+      <label class="sr-only" for="input-${e.codigo}">Presença da semana ${semana} — ${escapar(e.nome)}</label>
       <input type="number" id="input-${e.codigo}" data-codigo="${e.codigo}" min="0" max="100" step="0.01"
-             inputmode="decimal" value="${lancamentos[semana][e.codigo] ?? ""}" placeholder="Presença %">
+             inputmode="decimal" value="${lancamentos[semana][e.codigo] ?? ""}" placeholder="0.00">
     </article>`).join("")
-    : '<p class="sem-dado">Selecione seu nome em “Quem está lançando” para ver as suas escolas.</p>';
+    : '<p class="sem-dado" style="padding: 20px; text-align: center;">Nenhuma escola encontrada com os filtros atuais.</p>';
 }
 
 function aplicarRegistro({ semana, codigo, valor }) {
@@ -601,7 +601,7 @@ function exportarLancamentos() {
 }
 
 function restaurarBase() {
-  if (sincronizacaoAtiva()) return avisar("Com a base Firebase, edite diretamente os campos para corrigir os lançamentos.");
+  if (sincronizacaoAtiva()) return avisar("Com a base Firebase, edite diretamente os campos para corrigir os lançamentos.", true);
   if (!confirm("Deseja restaurar a base original?")) return;
   localStorage.removeItem(CHAVE_ARMAZENAMENTO);
   lancamentos = structuredClone(LANCAMENTOS_SEMANAIS);
@@ -787,7 +787,9 @@ function configurarEventos() {
 
   $("#semana-calculadora").addEventListener("change", renderizarCalculadora);
   $("#responsavel-lancamento").addEventListener("change", renderizarCalculadora);
+  $("#busca-calculadora").addEventListener("input", renderizarCalculadora);
   $("#lancamento-grid").addEventListener("input", () => { calculadoraAlterada = true; });
+  
   document.addEventListener("visibilitychange", () => { if (!document.hidden) carregarRemoto(); });
   $("#restaurar-base").hidden = sincronizacaoAtiva();
   $("#calcular-semana").addEventListener("click", calcularSemana);
