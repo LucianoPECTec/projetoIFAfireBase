@@ -53,7 +53,6 @@ function legenda(itens, y) {
    2. Tipos de gráfico
    ========================= */
 
-// Barras horizontais clássicas com suporte para marcador de META
 function barras({ titulo, subtitulo, itens, min = 0, max, ref, chaves }) {
   const topo = chaves ? 124 : 104, linha = 30, rotuloX = 275, area = 335;
   const altura = topo + itens.length * linha + 46;
@@ -63,7 +62,6 @@ function barras({ titulo, subtitulo, itens, min = 0, max, ref, chaves }) {
   const corpo = itens.map((it, i) => {
     const y = topo + i * linha;
     
-    // Injeção visual do marcador de Meta Individual dentro da barra
     const tracoMeta = it.meta 
       ? `<line x1="${x(it.meta)}" y1="${y + 2}" x2="${x(it.meta)}" y2="${y + 22}" stroke="${COR.escuro}" stroke-width="2.5"/>
          <text x="${x(it.meta)}" y="${y - 1}" font-size="10" font-weight="700" fill="${COR.suave}" text-anchor="middle">Meta</text>`
@@ -82,12 +80,10 @@ function barras({ titulo, subtitulo, itens, min = 0, max, ref, chaves }) {
   return moldura(titulo, sub, altura, (chaves ? legenda(chaves, 92) : "") + meta + corpo);
 }
 
-// NOVO: Gráfico Divergente para mostrar o Impacto (+/-)
 function divergentes({ titulo, subtitulo, itens, min, max }) {
   const topo = 104, linha = 30, rotuloX = 275, area = 335;
   const altura = topo + itens.length * linha + 46;
   
-  // O zero fica centralizado dinamicamente
   const x = v => rotuloX + ((v - min) / (max - min)) * area;
   const zeroX = x(0);
 
@@ -167,8 +163,8 @@ const GRAFICOS = [
       titulo: "Ranking geral das escolas",
       subtitulo: "Nota final do desempenho multissistema · os 3 melhores em destaque",
       min: 0, max: Math.max(10, ...ESCOLAS.map(e => e.notaFinal)),
-      itens: [...ESCOLAS].sort((a, b) => a.posicao - b.posicao).map((e, i) => ({
-        rotulo: `${e.posicao}º ${nomeCurto(e.nome, 28)}`, valor: e.notaFinal, texto: numero(e.notaFinal), cor: medalha(i)
+      itens: [...ESCOLAS].sort((a, b) => b.notaFinal - a.notaFinal).map((e, i) => ({
+        rotulo: `${i + 1}º ${nomeCurto(e.nome, 28)}`, valor: e.notaFinal, texto: numero(e.notaFinal), cor: medalha(i)
       }))
     })
   },
@@ -176,7 +172,6 @@ const GRAFICOS = [
     id: "impacto-ifa",
     gerar: () => {
       const N = ESCOLAS.length;
-      // Cálculo do Impacto Matemático da Escola na URE
       const dados = ESCOLAS.map(e => {
         const impacto = (presencaAtual(e).media - CONFIG.ifaURE) / N;
         return { e, impacto };
@@ -208,7 +203,7 @@ const GRAFICOS = [
       itens: [...ESCOLAS].sort((a, b) => presencaAtual(b).media - presencaAtual(a).media).map(e => ({
         rotulo: nomeCurto(e.nome, 34), 
         valor: presencaAtual(e).media, 
-        meta: e.ifa, // Aciona o marcador de meta
+        meta: e.ifa, 
         texto: `${formatarPontos(presencaAtual(e).media)} (Meta: ${numero(e.ifa, 1)}%)`, 
         cor: COR_SITUACAO[situacaoIFA(e)]
       }))
