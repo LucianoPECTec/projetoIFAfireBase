@@ -18,6 +18,8 @@ const CONFIG = {
   semanasConcluidas: 37,       // última semana consolidada na base
   semanaFinal: 42,             // última semana considerada no cálculo do IFA
   ifaURE: 83.3,
+  // Endereço do App da Web (Codigo.gs). Vazio = modo local (lançamentos só no navegador).
+  urlSincronizacao: "",
   periodos: {
     levantamento: "1ª semana até a semana 37",
     projecao: "semanas 38 a 42"
@@ -27,7 +29,9 @@ const CONFIG = {
 const PLATAFORMAS = {
   tarefa: {
     nome: "Tarefa SP",
-    campo: "tarefa",
+    campo: "tarefa",          // percentual de realização (fração: 0,6583 = 65,83%)
+    formato: "percentual",    // exibido como 65,83%
+    campoNota: "notaTarefa",  // nota da planilha; define o ranking da plataforma
     casas: 2
   },
   redacao: {
