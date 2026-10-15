@@ -114,14 +114,14 @@ function avisar(texto, erro = false) {
    2. Armazenamento dos lançamentos (Firebase)
    ========================= */
 
-// Inicialização do Firebase (Cole aqui as suas chaves reais)
+// Inicialização do Firebase (Chaves Reais)
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY_AQUI",
-  authDomain: "SEU_PROJETO.firebaseapp.com",
-  projectId: "SEU_PROJETO_AQUI",
-  storageBucket: "SEU_PROJETO.appspot.com",
-  messagingSenderId: "SEU_MESSAGING_SENDER_ID",
-  appId: "SEU_APP_ID"
+  apiKey: "AIzaSyCG3259iTf9HRkIUbS5PGzSm5DOUXhlB0Y",
+  authDomain: "monitoramento-ure-sjrp.firebaseapp.com",
+  projectId: "monitoramento-ure-sjrp",
+  storageBucket: "monitoramento-ure-sjrp.firebasestorage.app",
+  messagingSenderId: "208479080069",
+  appId: "1:208479080069:web:bc0d2efefaa6fd5e5663ec"
 };
 
 firebase.initializeApp(firebaseConfig);
