@@ -42,7 +42,12 @@ function moldura(titulo, subtitulo, altura, corpo) {
 function legenda(itens, y) {
   let x = 28;
   return itens.map(i => {
-    const bloco = `<rect x="${x}" y="${y - 10}" width="12" height="12" rx="3" fill="${i.cor}"/>
+    // Se for o marcador de linha da meta individual, desenha um traço invés de quadrado
+    const icone = i.isLine 
+      ? `<line x1="${x + 6}" y1="${y - 12}" x2="${x + 6}" y2="${y + 2}" stroke="${i.cor}" stroke-width="4" stroke-linecap="round"/>`
+      : `<rect x="${x}" y="${y - 10}" width="12" height="12" rx="3" fill="${i.cor}"/>`;
+      
+    const bloco = `${icone}
       <text x="${x + 18}" y="${y}" font-size="12" fill="${COR.texto}">${escapar(i.rotulo)}</text>`;
     x += 54 + i.rotulo.length * 7.2;
     return bloco;
@@ -62,9 +67,9 @@ function barras({ titulo, subtitulo, itens, min = 0, max, ref, chaves }) {
   const corpo = itens.map((it, i) => {
     const y = topo + i * linha;
     
+    // Traço limpo e visível para a Meta Individual da Escola
     const tracoMeta = it.meta 
-      ? `<line x1="${x(it.meta)}" y1="${y + 2}" x2="${x(it.meta)}" y2="${y + 22}" stroke="${COR.escuro}" stroke-width="2.5"/>
-         <text x="${x(it.meta)}" y="${y - 1}" font-size="10" font-weight="700" fill="${COR.suave}" text-anchor="middle">Meta</text>`
+      ? `<line x1="${x(it.meta)}" y1="${y + 2}" x2="${x(it.meta)}" y2="${y + 22}" stroke="${COR.escuro}" stroke-width="3" stroke-linecap="round"/>`
       : "";
 
     return `<text x="${rotuloX - 10}" y="${y + 16}" text-anchor="end" font-size="13" fill="${COR.texto}">${escapar(it.rotulo)}</text>
@@ -74,10 +79,11 @@ function barras({ titulo, subtitulo, itens, min = 0, max, ref, chaves }) {
     <text x="${rotuloX + area + 12}" y="${y + 17}" font-size="13" font-weight="700" fill="${COR.escuro}">${escapar(it.texto)}</text>`;
   }).join("");
 
+  // Linha de Referência da URE (Desenhada APÓS as barras para ficar por cima)
   const meta = ref ? `<line x1="${x(ref.valor)}" y1="${topo - 4}" x2="${x(ref.valor)}" y2="${topo + itens.length * linha}" stroke="${COR.escuro}" stroke-width="2" stroke-dasharray="5 4"/>
     <text x="${x(ref.valor)}" y="${topo - 10}" text-anchor="middle" font-size="12" font-weight="700" fill="${COR.escuro}">${escapar(ref.rotulo)}</text>` : "";
 
-  return moldura(titulo, sub, altura, (chaves ? legenda(chaves, 92) : "") + meta + corpo);
+  return moldura(titulo, sub, altura, (chaves ? legenda(chaves, 92) : "") + corpo + meta);
 }
 
 function divergentes({ titulo, subtitulo, itens, min, max }) {
@@ -195,19 +201,28 @@ const GRAFICOS = [
   },
   {
     id: "presenca-ifa",
-    gerar: () => barras({
-      titulo: "Presença consolidada × IFA",
-      subtitulo: "Traço e valor = Meta da escola · Linha tracejada = IFA da URE",
-      min: 70, max: 100, chaves: Object.entries(COR_SITUACAO).map(([rotulo, cor]) => ({ rotulo, cor })),
-      ref: { valor: CONFIG.ifaURE, rotulo: `IFA da URE ${numero(CONFIG.ifaURE, 1)}%` },
-      itens: [...ESCOLAS].sort((a, b) => presencaAtual(b).media - presencaAtual(a).media).map(e => ({
-        rotulo: nomeCurto(e.nome, 34), 
-        valor: presencaAtual(e).media, 
-        meta: e.ifa, 
-        texto: `${formatarPontos(presencaAtual(e).media)} (Meta: ${numero(e.ifa, 1)}%)`, 
-        cor: COR_SITUACAO[situacaoIFA(e)]
-      }))
-    })
+    gerar: () => {
+      // Configuração da legenda unificada (cores + marcador de meta)
+      const chavesLegenda = [
+        ...Object.entries(COR_SITUACAO).map(([rotulo, cor]) => ({ rotulo, cor })),
+        { rotulo: "IFA da Escola", cor: COR.escuro, isLine: true }
+      ];
+
+      return barras({
+        titulo: "Presença consolidada × IFA da Escola",
+        subtitulo: "Traço = IFA da Escola · Linha tracejada = IFA da URE",
+        min: 70, max: 100, 
+        chaves: chavesLegenda,
+        ref: { valor: CONFIG.ifaURE, rotulo: `IFA da URE ${numero(CONFIG.ifaURE, 1)}%` },
+        itens: [...ESCOLAS].sort((a, b) => presencaAtual(b).media - presencaAtual(a).media).map(e => ({
+          rotulo: nomeCurto(e.nome, 34), 
+          valor: presencaAtual(e).media, 
+          meta: e.ifa, // Aciona o marcador de meta na barra
+          texto: `${formatarPontos(presencaAtual(e).media)} (IFA: ${numero(e.ifa, 1)}%)`, // Texto igual ao da tabela
+          cor: COR_SITUACAO[situacaoIFA(e)]
+        }))
+      });
+    }
   },
   {
     id: "situacao-ifa",
