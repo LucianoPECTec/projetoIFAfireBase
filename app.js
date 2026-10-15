@@ -8,7 +8,7 @@
    3. Cálculos do IFA e da projeção
    4. Rankings (Top 5 e supervisores)
    5. Renderização das telas
-   6. Calculadora semanal (IFA e Plataformas)
+   6. Calculadoras semanais (IFA e Plataformas)
    7. Fichas
    8. Inicialização
    ========================================================= */
@@ -17,9 +17,6 @@
 const CHAVE_ARMAZENAMENTO = "lancamentosIFA-URE-SJRP";
 const LIMITE_ATENCAO = 90; 
 
-// ==========================================
-// Injeção Dinâmica: Aba de Classificação Total no painel
-// ==========================================
 if (typeof PLATAFORMAS !== "undefined" && !PLATAFORMAS.top3) {
   PLATAFORMAS.top3 = { 
     nome: "Top 3 (Pódios)", 
@@ -127,7 +124,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const docRefIFA = db.collection("monitoramento").doc("lancamentosIFA");
-const docRefPlat = db.collection("monitoramento").doc("lancamentosPlataformas"); // Novo DB Plataformas
+const docRefPlat = db.collection("monitoramento").doc("lancamentosPlataformas");
 
 function mesclarLancamentos(base, local) {
   const resultado = structuredClone(base || {});
@@ -140,7 +137,7 @@ function mesclarLancamentos(base, local) {
 function sincronizacaoAtiva() { return true; }
 
 let lancamentos = typeof LANCAMENTOS_SEMANAIS !== "undefined" ? structuredClone(LANCAMENTOS_SEMANAIS) : {};
-let lancamentosPlat = {}; // Guarda os lançamentos das plataformas: [plataforma][semana][escola]
+let lancamentosPlat = {};
 
 function definirSincronizacao(texto, alerta = false) {
   const area = $("#status-sincronizacao");
@@ -175,7 +172,7 @@ async function carregarRemoto() {
   }
 }
 
-async function enviarRemoto(registros, responsavel) {
+async function enviarRemoto(registros) {
   const dadosParaSalvar = {};
   registros.forEach(reg => {
     if (!dadosParaSalvar[reg.semana]) dadosParaSalvar[reg.semana] = {};
@@ -184,8 +181,6 @@ async function enviarRemoto(registros, responsavel) {
   await docRefIFA.set(dadosParaSalvar, { merge: true });
   if (typeof aplicarRegistro === 'function') registros.forEach(aplicarRegistro);
 }
-
-const salvarLancamentos = () => {};
 
 /* =========================
    3. Cálculos do IFA e da projeção
@@ -352,7 +347,7 @@ function renderizarVisaoGeral() {
   Object.entries(kpis).forEach(([id, texto]) => { if ($(id))$(id).textContent = texto; });
 
   [["#kpi-ranking", ESCOLAS[0], "ranking"], ["#kpi-nota", maisNota, "ranking"], ["#kpi-presenca", maisPresenca, "ifa"]]
-    .forEach(([id, escola, contexto]) => { if ($(id))$(id).innerHTML = botaoEscola(escola, contexto); });
+    .forEach(([id, escola]) => { if ($(id))$(id).innerHTML = botaoEscola(escola, "ranking"); });
 
   preencherTabela("#tabela-resumo", [...ESCOLAS].sort((a, b) => a.posicao - b.posicao).map(e => `
     <tr>
@@ -383,6 +378,7 @@ const correspondeBusca = (escola, busca) =>
 
 function preencherSupervisores() {
   const select = $("#filtro-supervisor");
+  if (!select) return;
   [...new Set(ESCOLAS.map(e => e.supervisor).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "pt-BR"))
     .forEach(nome => select.add(new Option(nome, nome)));
@@ -412,6 +408,7 @@ let plataformaAtual = "tarefa";
 
 function montarAbasPlataforma() {
   const area = $("#abas-plataforma");
+  if (!area) return;
   area.innerHTML = Object.entries(PLATAFORMAS).map(([chave, p]) => `
     <button type="button" class="aba-plataforma" data-chave="${chave}"
             aria-pressed="${chave === plataformaAtual}">${p.nome}</button>`).join("");
@@ -447,7 +444,6 @@ function renderizarPlataformas() {
     .map((e, i) => ({ e, n: i + 1 }))
     .filter(({ e }) => correspondeBusca(e, busca))
     .map(({ e, n }) => {
-      
       const renderValor = config.campoNota 
         ? `<div class="barra-valores-duplos">
              <div class="valor-col"><small>Nota</small><strong>${formatarNota(e[config.campoNota])}</strong></div>
@@ -505,15 +501,14 @@ function atualizarTudo() {
 }
 
 /* =========================
-   6. Calculadoras (IFA e PLATAFORMAS)
+   6. Calculadoras
    ========================= */
 
 const TODAS = "__todas__";
-let calculadoraAlterada = false;
 
-// ------- A. Lançamento IFA -------
 function preencherResponsaveis() {
   const select = $("#responsavel-lancamento");
+  if (!select) return;
   select.add(new Option("Todas as escolas da URE", TODAS));
   [...new Set(ESCOLAS.map(e => e.supervisor).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "pt-BR"))
@@ -521,28 +516,28 @@ function preencherResponsaveis() {
 }
 
 function escolasDoResponsavel() {
-  const quem = $("#responsavel-lancamento").value;
-  if (!quem) return [];
+  const quem = $("#responsavel-lancamento")?.value;
+  if (!quem) return ESCOLAS;
   return quem === TODAS ? ESCOLAS : ESCOLAS.filter(e => e.supervisor === quem);
 }
 
 function renderizarCalculadora() {
+  const grid = $("#lancamento-grid");
+  if (!grid) return;
   const semana = Number($("#semana-calculadora").value);
   lancamentos[semana] ??= {};
   
   const busca = ($("#busca-calculadora").value || "").trim().toLowerCase();
   const lista = escolasDoResponsavel().filter(e => correspondeBusca(e, busca));
-  
-  calculadoraAlterada = false;
 
-  $("#lancamento-grid").innerHTML = lista.length ? lista.map(e => `
+  grid.innerHTML = lista.length ? lista.map(e => `
     <article class="lancamento-linha">
       <h4>${escapar(e.nome)} <small class="codigo-escola">(${e.codigo})</small></h4>
       <label class="sr-only" for="input-${e.codigo}">Presença da semana ${semana} — ${escapar(e.nome)}</label>
       <input type="number" id="input-${e.codigo}" data-codigo="${e.codigo}" min="0" max="100" step="0.01"
              inputmode="decimal" value="${lancamentos[semana][e.codigo] ?? ""}" placeholder="0.00">
     </article>`).join("")
-    : '<p class="sem-dado" style="padding: 20px; text-align: center;">Nenhuma escola encontrada com os filtros atuais.</p>';
+    : '<p class="sem-dado" style="padding: 20px; text-align: center;">Nenhuma escola encontrada.</p>';
 }
 
 function aplicarRegistro({ semana, codigo, valor }) {
@@ -552,12 +547,11 @@ function aplicarRegistro({ semana, codigo, valor }) {
 }
 
 async function calcularSemana() {
-  const semana = Number($("#semana-calculadora").value);
-  const responsavel = $("#responsavel-lancamento").value; const registros = [];    for (const campo of $$("#lancamento-grid input")) {
+  const semana = Number($("#semana-calculadora").value); const registros = [];    for (const campo of $$("#lancamento-grid input")) {
     const texto = campo.value.trim();
     const valor = Number(texto);
     if (texto !== "" && (Number.isNaN(valor) || valor < 0 || valor > 100)) {
-      avisar(`Valor inválido para ${buscarEscola(campo.dataset.codigo).nome}: use de 0 a 100.`, true);
+      avisar(`Valor inválido: use de 0 a 100.`, true);
       campo.focus();
       return;
     }
@@ -569,58 +563,62 @@ async function calcularSemana() {
   if (!registros.length) return avisar("Nenhuma alteração para salvar.");
 
   const botao = $("#calcular-semana");
-  botao.disabled = true;
+  if (botao) botao.disabled = true;
   try {
     if (sincronizacaoAtiva()) {
-      await enviarRemoto(registros, responsavel);
+      await enviarRemoto(registros);
     } else {
       registros.forEach(aplicarRegistro);
-      salvarLancamentos();
     }
     atualizarTudo();
     renderizarCalculadora();
-    avisar(sincronizacaoAtiva() ? `Semana ${semana} salva na base Firebase.` : `Semana ${semana} salva neste navegador.`);
+    avisar(`Semana ${semana} salva com sucesso na nuvem!`);
   } catch (erro) {
     console.error(erro);
-    avisar("Não foi possível salvar na base Firebase. Confira a internet.", true);
+    avisar("Erro ao salvar no Firebase.", true);
   } finally {
-    botao.disabled = false;
+    if (botao) botao.disabled = false;
   }
 }
 
-// ------- B. Lançamento Plataformas -------
+// Plataformas
 function preencherFiltrosPlataformas() {
   const selResp = $("#responsavel-plat");
+  const selPlat = $("#plat-selecionada");
+  if (!selResp || !selPlat) return;
+
   selResp.add(new Option("Todas as Escolas (Visão Dirigente)", TODAS));
   [...new Set(ESCOLAS.map(e => e.supervisor).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "pt-BR"))
     .forEach(nome => selResp.add(new Option(`Supervisor(a): ${nome}`, nome)));
 
-  const selPlat = $("#plat-selecionada");
   Object.entries(PLATAFORMAS).forEach(([chave, p]) => {
     if (chave !== 'top3') selPlat.add(new Option(p.nome, chave));
   });
 }
 
 function renderizarCalculadoraPlat() {
-  const plat = $("#plat-selecionada").value;
-  const semana = Number($("#semana-plat").value);
-  const resp = $("#responsavel-plat").value;
-  const busca = ($("#busca-plat-calc").value || "").trim().toLowerCase();
+  const grid = $("#lancamento-grid-plat");
+  const plat = $("#plat-selecionada")?.value;
+  const semana = Number($("#semana-plat")?.value);
+  const resp = $("#responsavel-plat")?.value || TODAS;
+  const busca = ($("#busca-plat-calc")?.value || "").trim().toLowerCase();
+
+  if (!grid || !plat) return;
   
-  if (!lancamentosPlat[plat]) lancamentosPlat[plat] = {};
-  if (!lancamentosPlat[plat][semana]) lancamentosPlat[plat][semana] = {};
+  lancamentosPlat[plat] ??= {};
+  lancamentosPlat[plat][semana] ??= {};
 
   const lista = (resp === TODAS ? ESCOLAS : ESCOLAS.filter(e => e.supervisor === resp))
                 .filter(e => correspondeBusca(e, busca));
 
-  $("#lancamento-grid-plat").innerHTML = lista.length ? lista.map(e => `
+  grid.innerHTML = lista.length ? lista.map(e => `
     <article class="lancamento-linha">
       <h4>${escapar(e.nome)} <small class="codigo-escola">(${e.codigo})</small></h4>
       <input type="number" data-codigo="${e.codigo}" min="0" step="0.01"
              inputmode="decimal" value="${lancamentosPlat[plat][semana][e.codigo] ?? ""}" placeholder="Valor (0 a 10)">
     </article>`).join("")
-    : '<p class="sem-dado" style="padding: 20px; text-align: center;">Nenhuma escola encontrada com os filtros atuais.</p>';
+    : '<p class="sem-dado" style="padding: 20px; text-align: center;">Nenhuma escola encontrada.</p>';
 }
 
 async function salvarPlataformasSemana() {
@@ -629,7 +627,7 @@ async function salvarPlataformasSemana() {
     const texto = campo.value.trim();
     const valor = Number(texto);
     if (texto !== "" && (Number.isNaN(valor) || valor < 0)) {
-      avisar(`Valor inválido para a escola ${campo.dataset.codigo}.`, true);
+      avisar(`Valor inválido.`, true);
       campo.focus();
       return;
     }
@@ -642,10 +640,10 @@ async function salvarPlataformasSemana() {
   if (!registros.length) return avisar("Nenhuma alteração para salvar.");
 
   const botao = $("#salvar-plat");
-  botao.disabled = true;
+  if (botao) botao.disabled = true;
   try {
-    if (!lancamentosPlat[plat]) lancamentosPlat[plat] = {};
-    if (!lancamentosPlat[plat][semana]) lancamentosPlat[plat][semana] = {};
+    lancamentosPlat[plat] ??= {};
+    lancamentosPlat[plat][semana] ??= {};
     
     registros.forEach(r => {
        if (r.valor === null) delete lancamentosPlat[plat][semana][r.codigo];
@@ -653,35 +651,14 @@ async function salvarPlataformasSemana() {
     });
 
     await docRefPlat.set(lancamentosPlat, { merge: true });
-    
-    avisar(`Dados de ${PLATAFORMAS[plat].nome} (Semana ${semana}) salvos com sucesso na nuvem!`);
+    avisar(`Dados de ${PLATAFORMAS[plat].nome} salvos na nuvem!`);
     renderizarCalculadoraPlat();
   } catch (erro) {
     console.error(erro);
-    avisar("Erro ao salvar no Firebase. Verifique a internet.", true);
+    avisar("Erro ao salvar no Firebase.", true);
   } finally {
-    botao.disabled = false;
+    if (botao) botao.disabled = false;
   }
-}
-
-// -----------------------------------------
-
-function exportarLancamentos() {
-  const blob = new Blob([JSON.stringify(lancamentos, null, 2)], { type: "application/json" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "lancamentos-ifa-atualizados.json";
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-function restaurarBase() {
-  if (sincronizacaoAtiva()) return avisar("Com a base Firebase, edite diretamente os campos para corrigir os lançamentos.", true);
-  if (!confirm("Deseja restaurar a base original?")) return;
-  localStorage.removeItem(CHAVE_ARMAZENAMENTO);
-  lancamentos = structuredClone(LANCAMENTOS_SEMANAIS);
-  atualizarTudo();
-  renderizarCalculadora();
 }
 
 /* =========================
@@ -724,31 +701,26 @@ function tabelaPlataformas(escola) {
 const FICHAS = {
   ranking: e => ({
     rotulo: "Visão: ranking geral",
-    html: tabela(`Posição de ${e.nome} no ranking geral`, ["Indicador", "Resultado"], [
+    html: tabela(`Posição de ${e.nome}`, ["Indicador", "Resultado"], [
       ["Posição no ranking geral", `${e.posicao}º de ${ESCOLAS.length}`],
       ["Nota final", numero(e.notaFinal)],
       ["Nota Tarefa SP", formatarNota(e.notaTarefa)],
-      ["Vezes no Top 3 / Top 5 / Top 10", `${e.top3} / ${e.top5} / ${e.top10}`],
-      ["Posição média ao longo do ano", `${numero(e.posicaoMedia, 1)}º`]
+      ["Vezes no Top 3 / Top 5 / Top 10", `${e.top3} / ${e.top5} / ${e.top10}`]
     ]) + "<h3>Posição por plataforma</h3>" + tabelaPlataformas(e)
   }),
 
   plataforma: e => {
     const p = PLATAFORMAS[plataformaAtual];
     const est = estatisticaPlataforma(plataformaAtual, e);
-    const tem = !semValor(e[p.campo]) && est.media !== null;
-    const campoDif = p.campoNota || p.campo; 
-    const diferenca = !tem ? "Sem dado"
-      : p.campoNota ? `${formatarNota(e[campoDif] - est.media[campoDif])} na nota`
-      : numero(e[campoDif] - est.media[campoDif], p.casas);
+    const campoDif = p.campoNota || p.campo;
+    const diferenca = semValor(e[p.campo]) || est.media === null ? "Sem dado" : numero(e[campoDif] - est.media[campoDif], p.casas);
     return {
       rotulo: `Visão: plataforma ${p.nome}`,
       html: tabela(`${e.nome} em ${p.nome}`, ["Indicador", "Resultado"], [
         ["Resultado", textoValor(p, e)],
         ["Posição", textoPosicao(est)],
         ["Média da URE", textoValor(p, est.media)],
-        ["Diferença para a média", diferenca],
-        ["Melhor resultado da URE", textoValor(p, est.melhor)]
+        ["Diferença para a média", diferenca]
       ]) + "<h3>Todas as plataformas</h3>" + tabelaPlataformas(e)
     };
   },
@@ -766,10 +738,9 @@ const FICHAS = {
         ["Presença consolidada", formatarPontos(presencaAtual(e).media)],
         ["IFA da escola", formatarPontos(e.ifa)],
         ["IFA da URE", formatarPontos(CONFIG.ifaURE)],
-        ["Média necessária até a semana 42", necessaria === null ? "Meta já atingida" : formatarPontos(necessaria)],
-        ["Projeção de fechamento", formatarPontos(presencaProjetada(e))],
+        ["Média necessária", necessaria === null ? "Meta já atingida" : formatarPontos(necessaria)],
         ["Situação", seloSituacao(situacaoIFA(e))]
-      ]) + "<h3>Presença por período</h3>" + tabela(`Presença de ${e.nome} por período`, ["Período", "Presença", "Status"], periodos)
+      ]) + "<h3>Presença por período</h3>" + tabela(`Período`, ["Período", "Presença", "Status"], periodos)
     };
   },
 
@@ -780,7 +751,6 @@ const FICHAS = {
       ["Nota final", numero(e.notaFinal)],
       ["Presença consolidada", formatarPontos(presencaAtual(e).media)],
       ["IFA da escola", formatarPontos(e.ifa)],
-      ["Situação do IFA", seloSituacao(situacaoIFA(e))],
       ["Supervisor(a)", botaoSupervisor(e.supervisor)]
     ]) + "<h3>Desempenho por plataforma</h3>" + tabelaPlataformas(e)
   })
@@ -788,8 +758,7 @@ const FICHAS = {
 
 function mostrarModal() {
   const modal = $("#modal-escola");
-  if (!modal.open) modal.showModal();
-  $("#modal-conteudo").scrollTop = 0;
+  if (modal && !modal.open) modal.showModal();
 }
 
 function abrirFicha(codigo, contexto = "escolas") {
@@ -808,15 +777,12 @@ function abrirSupervisor(nome) {
 
   $("#modal-titulo").textContent = sup.nome;
   $("#modal-conteudo").innerHTML = `
-    <p class="contexto-ficha">Visão: supervisão (${sup.posicao}º no ranking de supervisores)</p>
+    <p class="contexto-ficha">Visão: supervisão (${sup.posicao}º no ranking)</p>
     ${tabela(`Escolas de ${sup.nome}`, ["Escola", "Nota final", "Presença", "IFA", "Situação"],
       [...sup.escolas].sort(ORDENACOES.ranking).map(e => [
         botaoEscola(e, "escolas"), numero(e.notaFinal), formatarPontos(presencaAtual(e).media),
         formatarPontos(e.ifa), seloSituacao(situacaoIFA(e))
-      ]))}
-    <p>Nota média: <strong>${numero(sup.notaMedia)}</strong> · Presença média:
-       <strong>${formatarPontos(sup.presencaMedia)}</strong> · Dentro do IFA:
-       <strong>${sup.dentroIFA} de ${sup.escolas.length}</strong></p>`;
+      ]))}`;
   mostrarModal();
 }
 
@@ -840,47 +806,41 @@ function configurarEventos() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }));
 
-  const ligar = (ids, evento, funcao) => ids.forEach(id => $(id).addEventListener(evento, funcao));
+  const ligar = (ids, evento, funcao) => ids.forEach(id => $(id)?.addEventListener(evento, funcao));
+  
   ligar(["#busca-escola"], "input", renderizarEscolas);
   ligar(["#filtro-supervisor", "#ordenar-escolas"], "change", renderizarEscolas);
   ligar(["#busca-plataforma"], "input", renderizarPlataformas);
   ligar(["#busca-ifa"], "input", renderizarIFA);
   ligar(["#filtro-situacao-ifa", "#ordenar-ifa"], "change", renderizarIFA);
 
-  $("#limpar-filtros").addEventListener("click", () => {
+  ligar(["#limpar-filtros"], "click", () => {
     $("#busca-escola").value = "";
     $("#filtro-supervisor").value = "";
     $("#ordenar-escolas").value = "ranking";
     renderizarEscolas();
   });
-  $("#limpar-ifa").addEventListener("click", () => {
+  
+  ligar(["#limpar-ifa"], "click", () => {
     $("#busca-ifa").value = "";
     $("#filtro-situacao-ifa").value = "";
     $("#ordenar-ifa").value = "presenca";
     renderizarIFA();
   });
 
-  // Eventos da Calculadora IFA
-  $("#semana-calculadora").addEventListener("change", renderizarCalculadora);
-  $("#responsavel-lancamento").addEventListener("change", renderizarCalculadora);
-  $("#busca-calculadora").addEventListener("input", renderizarCalculadora);
-  $("#lancamento-grid").addEventListener("input", () => { calculadoraAlterada = true; });
-  $("#calcular-semana").addEventListener("click", calcularSemana);
-  
-  // Eventos da Calculadora de Plataformas
-  $("#plat-selecionada").addEventListener("change", renderizarCalculadoraPlat);
-  $("#semana-plat").addEventListener("change", renderizarCalculadoraPlat);
-  $("#responsavel-plat").addEventListener("change", renderizarCalculadoraPlat);
-  $("#busca-plat-calc").addEventListener("input", renderizarCalculadoraPlat);
-  $("#salvar-plat").addEventListener("click", salvarPlataformasSemana);
+  // Calculadoras
+  ligar(["#semana-calculadora", "#responsavel-lancamento"], "change", renderizarCalculadora);
+  ligar(["#busca-calculadora"], "input", renderizarCalculadora);
+  ligar(["#calcular-semana"], "click", calcularSemana);
+
+  ligar(["#plat-selecionada", "#semana-plat", "#responsavel-plat"], "change", renderizarCalculadoraPlat);
+  ligar(["#busca-plat-calc"], "input", renderizarCalculadoraPlat);
+  ligar(["#salvar-plat"], "click", salvarPlataformasSemana);
 
   document.addEventListener("visibilitychange", () => { if (!document.hidden) carregarRemoto(); });
-  $("#restaurar-base").hidden = sincronizacaoAtiva();
-  $("#exportar-lancamentos").addEventListener("click", exportarLancamentos);
-  $("#restaurar-base").addEventListener("click", restaurarBase);
 
-  $("#fechar-modal").addEventListener("click", () => $("#modal-escola").close());
-  $("#modal-escola").addEventListener("click", evento => {
+  ligar(["#fechar-modal"], "click", () => $("#modal-escola")?.close());
+  $("#modal-escola")?.addEventListener("click", evento => {
     if (evento.target.id === "modal-escola") $("#modal-escola").close();
   });
 }
@@ -889,15 +849,13 @@ function iniciar() {
   configurarEventos();
   preencherSupervisores();
   preencherResponsaveis();
-  preencherFiltrosPlataformas(); // Novo
+  preencherFiltrosPlataformas();
   montarAbasPlataforma();
   atualizarTudo();
   renderizarPlataformas();
   renderizarCalculadora();
-  renderizarCalculadoraPlat(); // Novo
-  definirSincronizacao(sincronizacaoAtiva()
-    ? "Conectando à base Firebase…"
-    : "Modo local: os lançamentos ficam salvos apenas neste navegador.");
+  renderizarCalculadoraPlat();
+  definirSincronizacao("Conectando à base Firebase…");
   carregarRemoto();
 }
 
