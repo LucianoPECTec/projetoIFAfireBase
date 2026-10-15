@@ -257,38 +257,55 @@
 
       <section class="calculadora" aria-labelledby="titulo-calculadora">
         <header class="calculadora-cabecalho">
-          <h3 id="titulo-calculadora">Calculadora semanal do IFA</h3>
-          <p>Informe a presença da semana (de 0 a 100). O painel recalcula a média consolidada, a média necessária e a situação de cada escola.</p>
+          <h3 id="titulo-calculadora">Lançamento Semanal de Presença</h3>
+          <p>Informe a presença da semana. Utilize os filtros para localizar rapidamente as escolas desejadas.</p>
         </header>
 
         <form id="formulario-ifa" aria-label="Lançamento semanal do Aluno Presente">
           <fieldset>
-            <legend>Lançamento da semana</legend>
+            <legend class="sr-only">Lançamento da semana</legend>
             <p id="status-sincronizacao" class="status-sincronizacao" role="status"></p>
-            <div class="campo">
-              <label for="responsavel-lancamento">Quem está lançando</label>
-              <select id="responsavel-lancamento" name="responsavel-lancamento">
-                <option value="">Selecione seu nome</option>
-              </select>
-            </div>
-            <div class="campo">
-              <label for="semana-calculadora">Semana</label>
-              <select id="semana-calculadora" name="semana-calculadora">
-                <option value="38">Semana 38</option>
-                <option value="39">Semana 39</option>
-                <option value="40">Semana 40</option>
-                <option value="41">Semana 41</option>
-                <option value="42">Semana 42</option>
-              </select>
+
+            <div class="calculadora-controles">
+              <div class="campo">
+                <label for="semana-calculadora">Semana de Referência</label>
+                <select id="semana-calculadora" name="semana-calculadora">
+                  <option value="38">Semana 38</option>
+                  <option value="39">Semana 39</option>
+                  <option value="40">Semana 40</option>
+                  <option value="41">Semana 41</option>
+                  <option value="42">Semana 42</option>
+                </select>
+              </div>
+              <div class="campo">
+                <label for="responsavel-lancamento">Filtrar por Supervisor(a)</label>
+                <select id="responsavel-lancamento" name="responsavel-lancamento">
+                  <!-- Preenchido via JS -->
+                </select>
+              </div>
+              <div class="campo">
+                <label for="busca-calculadora">Buscar Escola</label>
+                <input type="search" id="busca-calculadora" placeholder="Nome ou código...">
+              </div>
             </div>
 
-            <div class="lancamentos" id="lancamento-grid"></div>
+            <div class="lancamentos-container">
+              <div class="lancamentos-header" aria-hidden="true">
+                <span>Unidade Escolar</span>
+                <span>Presença (%)</span>
+              </div>
+              <div class="lancamentos-lista" id="lancamento-grid">
+                <!-- Escolas injetadas aqui via JS -->
+              </div>
+            </div>
 
-            <ul class="acoes">
-              <li><button type="button" class="botao-primario" id="calcular-semana">Calcular e salvar semana</button></li>
-              <li><button type="button" class="botao-secundario" id="exportar-lancamentos">Exportar lançamentos</button></li>
-              <li><button type="button" class="botao-secundario" id="restaurar-base">Restaurar base original</button></li>
-            </ul>
+            <div class="acoes-calculadora">
+              <div class="acoes-secundarias">
+                <button type="button" class="botao-secundario" id="exportar-lancamentos">Exportar Backup JSON</button>
+                <button type="button" class="botao-secundario botao-perigo" id="restaurar-base">Restaurar Original</button>
+              </div>
+              <button type="button" class="botao-primario botao-salvar" id="calcular-semana">Salvar Lançamentos</button>
+            </div>
           </fieldset>
         </form>
       </section>
